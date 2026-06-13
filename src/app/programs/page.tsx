@@ -40,6 +40,8 @@ export default function ProgramsPage() {
   const programs = useLiveQuery(() => db.programs.toArray());
   const units = useLiveQuery(() => db.organization_units.toArray());
   const typePrograms = useLiveQuery(() => db.type_program.toArray());
+  const bidangs = useLiveQuery(() => db.bidang.toArray());
+  const subBidangs = useLiveQuery(() => db.sub_bidang.toArray());
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
@@ -64,6 +66,8 @@ export default function ProgramsPage() {
   const programList = programs || [];
   const unitList = units || [];
   const typeProgramList = typePrograms || [];
+  const bidangList = bidangs || [];
+  const subBidangList = subBidangs || [];
 
   // Query budget items dynamically for the selected program
   const budgetLines = useLiveQuery(
@@ -391,14 +395,14 @@ export default function ProgramsPage() {
                     <span className="text-slate-400 block mb-1">Bidang</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
                       <Layers size={14} className="text-primary-500 shrink-0" />
-                      <span className="truncate">{unitList.find(u => u.id === selectedProgram.bidang_id)?.name || 'N/A'}</span>
+                      <span className="truncate">{bidangList.find(b => b.id === selectedProgram.bidang_id)?.name || 'N/A'}</span>
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block mb-1">Sub-Bidang</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
                       <Layers size={14} className="text-primary-500 shrink-0" />
-                      <span className="truncate">{unitList.find(u => u.id === selectedProgram.sub_bidang_id)?.name || 'N/A'}</span>
+                      <span className="truncate">{subBidangList.find(s => s.id === selectedProgram.sub_bidang_id)?.name || 'N/A'}</span>
                     </span>
                   </div>
                   <div>

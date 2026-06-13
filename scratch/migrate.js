@@ -288,6 +288,14 @@ async function run() {
       FROM public.staging_bidang;
     `);
 
+    // B2. Bidang (Separate Table)
+    console.log('  Mapping clean bidang table...');
+    await client.query(`
+      INSERT INTO public.bidang (id, period_id, name, code, description, created_at, updated_at)
+      SELECT id, period_id, name, code, description, created_at, created_at
+      FROM public.staging_bidang;
+    `);
+
     // C. Organization Units (Sub-Bidang)
     console.log('  Mapping organization units (Sub-Bidang)...');
     await client.query(`
@@ -299,6 +307,14 @@ async function run() {
           bidang_id, 
           created_at, 
           created_at
+      FROM public.staging_sub_bidang;
+    `);
+
+    // C2. Sub-Bidang (Separate Table)
+    console.log('  Mapping clean sub_bidang table...');
+    await client.query(`
+      INSERT INTO public.sub_bidang (id, period_id, bidang_id, name, code, created_at, updated_at)
+      SELECT id, period_id, bidang_id, name, code, created_at, created_at
       FROM public.staging_sub_bidang;
     `);
 
@@ -481,6 +497,8 @@ async function run() {
     // 6. Print verify counts
     const periodsCount = await client.query('SELECT COUNT(*) FROM public.periods');
     const unitsCount = await client.query('SELECT COUNT(*) FROM public.organization_units');
+    const bidangCount = await client.query('SELECT COUNT(*) FROM public.bidang');
+    const subBidangCount = await client.query('SELECT COUNT(*) FROM public.sub_bidang');
     const typeProgramsCount = await client.query('SELECT COUNT(*) FROM public.type_program');
     const programsCount = await client.query('SELECT COUNT(*) FROM public.programs');
     const budgetsCount = await client.query('SELECT COUNT(*) FROM public.anggaran_program');
@@ -488,6 +506,8 @@ async function run() {
     console.log('\nRecord verification counts:');
     console.log(`- Periods: ${periodsCount.rows[0].count}`);
     console.log(`- Organization Units: ${unitsCount.rows[0].count}`);
+    console.log(`- Bidang (Separated): ${bidangCount.rows[0].count}`);
+    console.log(`- Sub-Bidang (Separated): ${subBidangCount.rows[0].count}`);
     console.log(`- Program Types: ${typeProgramsCount.rows[0].count}`);
     console.log(`- Programs: ${programsCount.rows[0].count}`);
     console.log(`- Detailed Budget Lines: ${budgetsCount.rows[0].count}`);

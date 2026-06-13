@@ -75,6 +75,28 @@ CREATE TABLE type_program (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Bidang
+CREATE TABLE bidang (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Sub-Bidang
+CREATE TABLE sub_bidang (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
+    bidang_id UUID NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Programs
 CREATE TABLE programs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,8 +106,8 @@ CREATE TABLE programs (
     pjp_unit_id UUID NOT NULL REFERENCES organization_units(id), -- Penanggung Jawab Program (Structural)
     pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
     type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
-    bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
-    sub_bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
+    bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
+    sub_bidang_id UUID REFERENCES sub_bidang(id) ON DELETE SET NULL,
     anggaran_penerimaan NUMERIC(15, 2) DEFAULT 0.00,
     anggaran_pengeluaran NUMERIC(15, 2) DEFAULT 0.00,
     program_code VARCHAR(100),
@@ -306,6 +328,8 @@ ALTER TABLE journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anggaran_program ENABLE ROW LEVEL SECURITY;
 ALTER TABLE type_program ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bidang ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sub_bidang ENABLE ROW LEVEL SECURITY;
 
 -- For MVP, allowing authenticated users to read and update. 
 -- In a real scenario, this would be locked down by specific policies derived from `user_role` and permissions.
@@ -321,5 +345,7 @@ CREATE POLICY "Allow authenticated read" ON journals FOR SELECT TO authenticated
 CREATE POLICY "Allow authenticated read" ON journal_lines FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read" ON anggaran_program FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read" ON type_program FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read" ON bidang FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read" ON sub_bidang FOR SELECT TO authenticated USING (true);
 
 -- (Write policies would follow matching user_roles, simplified for MVP setup)

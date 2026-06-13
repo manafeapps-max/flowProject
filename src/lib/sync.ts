@@ -50,6 +50,28 @@ export async function syncPull() {
       });
     }
 
+    // 3.6. Pull bidang
+    const { data: bidangList, error: bdError } = await supabase.from('bidang').select('*');
+    if (bdError) throw bdError;
+    if (bidangList) {
+      await db.transaction('rw', db.bidang, async () => {
+        for (const bd of bidangList) {
+          await db.bidang.put({ ...bd, sync_status: 'SYNCED' });
+        }
+      });
+    }
+
+    // 3.7. Pull sub_bidang
+    const { data: subBidangList, error: sbdError } = await supabase.from('sub_bidang').select('*');
+    if (sbdError) throw sbdError;
+    if (subBidangList) {
+      await db.transaction('rw', db.sub_bidang, async () => {
+        for (const sbd of subBidangList) {
+          await db.sub_bidang.put({ ...sbd, sync_status: 'SYNCED' });
+        }
+      });
+    }
+
     // 4. Pull detailed budgets (anggaran_program)
     const { data: budgets, error: bError } = await supabase.from('anggaran_program').select('*');
     if (bError) throw bError;
@@ -121,6 +143,32 @@ export async function syncPush() {
         console.error(`Error syncing type program ${id}:`, error.message);
       } else {
         await db.type_program.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 3.6. Push pending bidang
+    const pendingBidang = await db.bidang.where('sync_status').equals('PENDING').toArray();
+    for (const bd of pendingBidang) {
+      const { id, sync_status, ...rest } = bd;
+      const { error } = await supabase.from('bidang').upsert({ id, ...rest });
+      if (error) {
+        await db.bidang.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing bidang ${id}:`, error.message);
+      } else {
+        await db.bidang.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 3.7. Push pending sub_bidang
+    const pendingSubBidang = await db.sub_bidang.where('sync_status').equals('PENDING').toArray();
+    for (const sbd of pendingSubBidang) {
+      const { id, sync_status, ...rest } = sbd;
+      const { error } = await supabase.from('sub_bidang').upsert({ id, ...rest });
+      if (error) {
+        await db.sub_bidang.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing sub_bidang ${id}:`, error.message);
+      } else {
+        await db.sub_bidang.update(id, { sync_status: 'SYNCED' });
       }
     }
 
