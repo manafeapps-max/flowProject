@@ -34,6 +34,8 @@ export interface Program {
   pjp_unit_id: string;
   pic_membership_id: string;
   type_program_id?: string;
+  bidang_id?: string;
+  sub_bidang_id?: string;
   anggaran_penerimaan?: number;
   anggaran_pengeluaran?: number;
   sync_status: 'SYNCED' | 'PENDING' | 'ERROR';

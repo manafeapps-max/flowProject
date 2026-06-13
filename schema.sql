@@ -84,6 +84,8 @@ CREATE TABLE programs (
     pjp_unit_id UUID NOT NULL REFERENCES organization_units(id), -- Penanggung Jawab Program (Structural)
     pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
     type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
+    bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
+    sub_bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
     anggaran_penerimaan NUMERIC(15, 2) DEFAULT 0.00,
     anggaran_pengeluaran NUMERIC(15, 2) DEFAULT 0.00,
     program_code VARCHAR(100),

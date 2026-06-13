@@ -337,7 +337,7 @@ async function run() {
     console.log('  Mapping programs...');
     await client.query(`
       INSERT INTO public.programs (
-          id, period_id, name, status, pjp_unit_id, pic_membership_id, type_program_id,
+          id, period_id, name, status, pjp_unit_id, pic_membership_id, type_program_id, bidang_id, sub_bidang_id,
           anggaran_penerimaan, anggaran_pengeluaran,
           program_code, tujuan_program, tahun_anggaran, triwulan, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, catatan_anggaran, waktu,
           created_at, updated_at
@@ -350,9 +350,24 @@ async function run() {
           COALESCE(p.sub_bidang_id, p.bidang_id), 
           'de641feb-9990-4057-ba23-6c66253e2fa9',
           p.type_program_id,
+          p.bidang_id,
+          p.sub_bidang_id,
           0.00,
           0.00,
-          p.program_code,
+          COALESCE(
+              NULLIF(p.program_code, ''),
+              UPPER(
+                  CONCAT(
+                      COALESCE((SELECT code FROM public.staging_bidang WHERE id = p.bidang_id), 'GEN'),
+                      '-',
+                      COALESCE((SELECT code FROM public.staging_sub_bidang WHERE id = p.sub_bidang_id), 'GEN'),
+                      '-',
+                      COALESCE(SUBSTRING((SELECT name FROM public.staging_type_program WHERE id = p.type_program_id) FROM 1 FOR 3), 'GEN'),
+                      '-',
+                      RIGHT(p.id::text, 12)
+                  )
+              )
+          ),
           p.tujuan_program,
           (SELECT name FROM public.periods WHERE id = p.periode_id),
           p.triwulan,

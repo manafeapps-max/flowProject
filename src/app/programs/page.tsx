@@ -388,6 +388,20 @@ export default function ProgramsPage() {
                     </span>
                   </div>
                   <div>
+                    <span className="text-slate-400 block mb-1">Bidang</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
+                      <Layers size={14} className="text-primary-500 shrink-0" />
+                      <span className="truncate">{unitList.find(u => u.id === selectedProgram.bidang_id)?.name || 'N/A'}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1">Sub-Bidang</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
+                      <Layers size={14} className="text-primary-500 shrink-0" />
+                      <span className="truncate">{unitList.find(u => u.id === selectedProgram.sub_bidang_id)?.name || 'N/A'}</span>
+                    </span>
+                  </div>
+                  <div>
                     <span className="text-slate-400 block mb-1">Tahun Anggaran</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
                       <Calendar size={14} className="text-primary-500 shrink-0" />
