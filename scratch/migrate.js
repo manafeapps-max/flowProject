@@ -396,7 +396,15 @@ async function run() {
           END,
           NULL,
           NULL,
-          p.ik_kualitatif,
+          CASE 
+              WHEN p.ik_kualitatif ILIKE '%April%Maret%' THEN '1, 2, 3, 4'
+              WHEN p.ik_kualitatif ILIKE '%Juni%Oktober%' THEN '1, 3'
+              WHEN p.ik_kualitatif ILIKE '%April%' OR p.ik_kualitatif ILIKE '%Mei%' OR p.ik_kualitatif ILIKE '%Juni%' OR p.ik_kualitatif ILIKE '%June%' THEN '1'
+              WHEN p.ik_kualitatif ILIKE '%Juli%' OR p.ik_kualitatif ILIKE '%Agustus%' OR p.ik_kualitatif ILIKE '%September%' OR p.ik_kualitatif ILIKE '%July%' OR p.ik_kualitatif ILIKE '%August%' THEN '2'
+              WHEN p.ik_kualitatif ILIKE '%Oktober%' OR p.ik_kualitatif ILIKE '%November%' OR p.ik_kualitatif ILIKE '%Desember%' OR p.ik_kualitatif ILIKE '%October%' OR p.ik_kualitatif ILIKE '%December%' THEN '3'
+              WHEN p.ik_kualitatif ILIKE '%Januari%' OR p.ik_kualitatif ILIKE '%Februari%' OR p.ik_kualitatif ILIKE '%Maret%' OR p.ik_kualitatif ILIKE '%January%' OR p.ik_kualitatif ILIKE '%February%' OR p.ik_kualitatif ILIKE '%March%' THEN '4'
+              ELSE NULL
+          END,
           p.created_at, 
           p.updated_at
       FROM public.staging_program p;

@@ -500,7 +500,17 @@ export default function ProgramsPage() {
                     <Clock size={14} className="text-primary-500 shrink-0" /> Waktu Pelaksanaan
                   </span>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                    {selectedProgram.waktu || <span className="text-slate-400 italic font-normal">N/A</span>}
+                    {selectedProgram.waktu ? (
+                      selectedProgram.waktu
+                        .split(',')
+                        .map((w: string) => {
+                          const trimmed = w.trim();
+                          return /^[1-4]$/.test(trimmed) ? `Q${trimmed}` : trimmed;
+                        })
+                        .join(', ')
+                    ) : (
+                      <span className="text-slate-400 italic font-normal">N/A</span>
+                    )}
                   </p>
                 </div>
 
