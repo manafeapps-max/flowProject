@@ -374,13 +374,13 @@ async function run() {
               NULLIF(p.program_code, ''),
               UPPER(
                   CONCAT(
-                      COALESCE((SELECT code FROM public.staging_bidang WHERE id = p.bidang_id), 'GEN'),
+                      REGEXP_REPLACE(COALESCE((SELECT name FROM public.staging_bidang WHERE id = p.bidang_id), 'GEN'), '[^a-zA-Z0-9]+', '', 'g'),
                       '-',
-                      COALESCE((SELECT code FROM public.staging_sub_bidang WHERE id = p.sub_bidang_id), 'GEN'),
+                      REGEXP_REPLACE(COALESCE((SELECT name FROM public.staging_sub_bidang WHERE id = p.sub_bidang_id), 'GEN'), '[^a-zA-Z0-9]+', '', 'g'),
                       '-',
-                      COALESCE(SUBSTRING((SELECT name FROM public.staging_type_program WHERE id = p.type_program_id) FROM 1 FOR 3), 'GEN'),
+                      REGEXP_REPLACE(COALESCE((SELECT name FROM public.staging_type_program WHERE id = p.type_program_id), 'GEN'), '[^a-zA-Z0-9]+', '', 'g'),
                       '-',
-                      RIGHT(p.id::text, 12)
+                      RIGHT(p.id::text, 8)
                   )
               )
           ),
