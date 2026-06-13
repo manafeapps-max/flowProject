@@ -65,6 +65,16 @@ CREATE TABLE user_role (
     UNIQUE(user_id, role, period_id)
 );
 
+-- Program Types
+CREATE TABLE type_program (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Programs
 CREATE TABLE programs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -73,6 +83,7 @@ CREATE TABLE programs (
     status program_status_enum DEFAULT 'DRAFT',
     pjp_unit_id UUID NOT NULL REFERENCES organization_units(id), -- Penanggung Jawab Program (Structural)
     pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
+    type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
     anggaran_penerimaan NUMERIC(15, 2) DEFAULT 0.00,
     anggaran_pengeluaran NUMERIC(15, 2) DEFAULT 0.00,
     program_code VARCHAR(100),
@@ -292,6 +303,7 @@ ALTER TABLE coa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anggaran_program ENABLE ROW LEVEL SECURITY;
+ALTER TABLE type_program ENABLE ROW LEVEL SECURITY;
 
 -- For MVP, allowing authenticated users to read and update. 
 -- In a real scenario, this would be locked down by specific policies derived from `user_role` and permissions.
@@ -306,5 +318,6 @@ CREATE POLICY "Allow authenticated read" ON coa FOR SELECT TO authenticated USIN
 CREATE POLICY "Allow authenticated read" ON journals FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read" ON journal_lines FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow authenticated read" ON anggaran_program FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read" ON type_program FOR SELECT TO authenticated USING (true);
 
 -- (Write policies would follow matching user_roles, simplified for MVP setup)

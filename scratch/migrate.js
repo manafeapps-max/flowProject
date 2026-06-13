@@ -325,11 +325,19 @@ async function run() {
       ) ON CONFLICT DO NOTHING;
     `);
 
+    // D3. Program Types
+    console.log('  Mapping program types...');
+    await client.query(`
+      INSERT INTO public.type_program (id, name, description, is_active, sort_order, created_at)
+      SELECT id, name, description, is_active, sort_order, created_at
+      FROM public.staging_type_program;
+    `);
+
     // E. Programs
     console.log('  Mapping programs...');
     await client.query(`
       INSERT INTO public.programs (
-          id, period_id, name, status, pjp_unit_id, pic_membership_id,
+          id, period_id, name, status, pjp_unit_id, pic_membership_id, type_program_id,
           anggaran_penerimaan, anggaran_pengeluaran,
           program_code, tujuan_program, tahun_anggaran, triwulan, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, catatan_anggaran, waktu,
           created_at, updated_at
@@ -341,6 +349,7 @@ async function run() {
           COALESCE(p.status::program_status_enum, 'DRAFT'::program_status_enum), 
           COALESCE(p.sub_bidang_id, p.bidang_id), 
           'de641feb-9990-4057-ba23-6c66253e2fa9',
+          p.type_program_id,
           0.00,
           0.00,
           p.program_code,
@@ -457,12 +466,14 @@ async function run() {
     // 6. Print verify counts
     const periodsCount = await client.query('SELECT COUNT(*) FROM public.periods');
     const unitsCount = await client.query('SELECT COUNT(*) FROM public.organization_units');
+    const typeProgramsCount = await client.query('SELECT COUNT(*) FROM public.type_program');
     const programsCount = await client.query('SELECT COUNT(*) FROM public.programs');
     const budgetsCount = await client.query('SELECT COUNT(*) FROM public.anggaran_program');
 
     console.log('\nRecord verification counts:');
     console.log(`- Periods: ${periodsCount.rows[0].count}`);
     console.log(`- Organization Units: ${unitsCount.rows[0].count}`);
+    console.log(`- Program Types: ${typeProgramsCount.rows[0].count}`);
     console.log(`- Programs: ${programsCount.rows[0].count}`);
     console.log(`- Detailed Budget Lines: ${budgetsCount.rows[0].count}`);
 

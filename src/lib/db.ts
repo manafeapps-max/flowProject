@@ -17,6 +17,15 @@ export interface OrganizationUnit {
   sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
 }
 
+export interface TypeProgram {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  sort_order: number;
+  sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
+}
+
 export interface Program {
   id: string;
   period_id: string;
@@ -24,6 +33,7 @@ export interface Program {
   status: 'DRAFT' | 'UNDER_REVIEW' | 'PROPOSED' | 'APPROVED' | 'REJECTED';
   pjp_unit_id: string;
   pic_membership_id: string;
+  type_program_id?: string;
   anggaran_penerimaan?: number;
   anggaran_pengeluaran?: number;
   sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
@@ -74,6 +84,7 @@ export class CMPDatabase extends Dexie {
   programs!: Table<Program, string>;
   journals!: Table<Journal, string>;
   anggaran_program!: Table<AnggaranProgram, string>;
+  type_program!: Table<TypeProgram, string>;
 
   constructor() {
     super('CMPDatabase');
@@ -83,6 +94,7 @@ export class CMPDatabase extends Dexie {
       programs: 'id, period_id, status, sync_status',
       journals: 'id, period_id, status, sync_status',
       anggaran_program: 'id, program_id, jenis_anggaran, sync_status',
+      type_program: 'id, sync_status',
     });
   }
 }

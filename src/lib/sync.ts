@@ -39,6 +39,17 @@ export async function syncPull() {
       });
     }
 
+    // 3.5. Pull program types
+    const { data: typePrograms, error: tpError } = await supabase.from('type_program').select('*');
+    if (tpError) throw tpError;
+    if (typePrograms) {
+      await db.transaction('rw', db.type_program, async () => {
+        for (const tp of typePrograms) {
+          await db.type_program.put({ ...tp, sync_status: 'SYNCED' });
+        }
+      });
+    }
+
     // 4. Pull detailed budgets (anggaran_program)
     const { data: budgets, error: bError } = await supabase.from('anggaran_program').select('*');
     if (bError) throw bError;
@@ -97,6 +108,19 @@ export async function syncPush() {
         console.error(`Error syncing program ${id}:`, error.message);
       } else {
         await db.programs.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 3.5. Push pending program types
+    const pendingTypePrograms = await db.type_program.where('sync_status').equals('PENDING').toArray();
+    for (const tp of pendingTypePrograms) {
+      const { id, sync_status, ...rest } = tp;
+      const { error } = await supabase.from('type_program').upsert({ id, ...rest });
+      if (error) {
+        await db.type_program.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing type program ${id}:`, error.message);
+      } else {
+        await db.type_program.update(id, { sync_status: 'SYNCED' });
       }
     }
 

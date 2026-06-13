@@ -39,6 +39,7 @@ const getMonthName = (m?: number) => {
 export default function ProgramsPage() {
   const programs = useLiveQuery(() => db.programs.toArray());
   const units = useLiveQuery(() => db.organization_units.toArray());
+  const typePrograms = useLiveQuery(() => db.type_program.toArray());
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
@@ -62,6 +63,7 @@ export default function ProgramsPage() {
 
   const programList = programs || [];
   const unitList = units || [];
+  const typeProgramList = typePrograms || [];
 
   // Query budget items dynamically for the selected program
   const budgetLines = useLiveQuery(
@@ -376,6 +378,13 @@ export default function ProgramsPage() {
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
                       <Layers size={14} className="text-primary-500 shrink-0" />
                       <span className="truncate">{unitList.find(u => u.id === selectedProgram.pjp_unit_id)?.name || 'N/A'}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1">Tipe Program</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <Briefcase size={14} className="text-primary-500 shrink-0" />
+                      <span className="truncate">{typeProgramList.find(t => t.id === selectedProgram.type_program_id)?.name || 'N/A'}</span>
                     </span>
                   </div>
                   <div>
