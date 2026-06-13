@@ -1,0 +1,58 @@
+SUPABASE
+
+email:
+manafeapps@gmail.com
+pass:
+Le0nard123#
+
+Organization:
+manafeapps@gmail.com's Org
+
+Project name:
+flowProject
+
+Project ID
+ouesnbkrsejuersezzhk
+
+Project region
+ap-southeast-1
+
+Region:
+Southeast Asia (Singapore)
+
+Database password:
+OtUj03yINyj2RvEx
+
+Project URL
+https://ouesnbkrsejuersezzhk.supabase.co
+
+Publishable key
+sb_publishable_rQ1ICgxZoqCh7l4IIqJ5eQ_RwSyL3AN
+
+Secret keys
+sb_secret_e65_-ZNpy2EHP4I6xqXRjg_V_DpqyxT
+
+anon public
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91ZXNuYmtyc2VqdWVyc2V6emhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzE4ODAsImV4cCI6MjA5NjkwNzg4MH0.GmGWzjUXH34bT45L0TOOnyzUYvGA44Z4tA_6yaqh8hk
+
+service_role
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91ZXNuYmtyc2VqdWVyc2V6emhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTMzMTg4MCwiZXhwIjoyMDk2OTA3ODgwfQ.QJHCx3LEepFh2pAWNnHmNvT1ceLMhhtT3fB-_IroMaM
+
+
+DOCKER
+
+email
+manafeapps@gmail.com
+
+username
+manafeapps
+
+pass
+Le0nard123#
+
+POSTGRES
+pass: Le0nard123#
+port: 5432
+
+
+
