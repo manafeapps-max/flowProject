@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, Program, AnggaranProgram } from "@/lib/db";
+import { db, Program, AnggaranProgram, Period } from "@/lib/db";
 import { 
   Briefcase, Plus, Filter, CircleArrowRight, CheckCircle2, Clock, X, 
   TrendingUp, TrendingDown, Coins, HelpCircle, Trash2, Calendar,
@@ -36,12 +36,38 @@ const getMonthName = (m?: number) => {
   return months[m - 1] || 'N/A';
 };
 
+const getTriwulanRange = (triwulan?: string, periodId?: string, periodList: Period[] = []) => {
+  if (!triwulan) return 'N/A';
+  const period = periodList.find(p => p.id === periodId);
+  if (!period) return triwulan;
+
+  const startDate = new Date(period.start_date);
+  if (isNaN(startDate.getTime())) return triwulan;
+
+  const startYear = startDate.getFullYear();
+  const endYear = startYear + 1;
+
+  switch (triwulan.toUpperCase()) {
+    case 'Q1':
+      return `Q1 (01 April ${startYear} - 30 June ${startYear})`;
+    case 'Q2':
+      return `Q2 (01 July ${startYear} - 30 September ${startYear})`;
+    case 'Q3':
+      return `Q3 (01 October ${startYear} - 31 December ${startYear})`;
+    case 'Q4':
+      return `Q4 (01 January ${endYear} - 31 March ${endYear})`;
+    default:
+      return triwulan;
+  }
+};
+
 export default function ProgramsPage() {
   const programs = useLiveQuery(() => db.programs.toArray());
   const units = useLiveQuery(() => db.organization_units.toArray());
   const typePrograms = useLiveQuery(() => db.type_program.toArray());
   const bidangs = useLiveQuery(() => db.bidang.toArray());
   const subBidangs = useLiveQuery(() => db.sub_bidang.toArray());
+  const periods = useLiveQuery(() => db.periods.toArray());
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
@@ -68,6 +94,7 @@ export default function ProgramsPage() {
   const typeProgramList = typePrograms || [];
   const bidangList = bidangs || [];
   const subBidangList = subBidangs || [];
+  const periodList = periods || [];
 
   // Query budget items dynamically for the selected program
   const budgetLines = useLiveQuery(
@@ -416,7 +443,7 @@ export default function ProgramsPage() {
                     <span className="text-slate-400 block mb-1">Triwulan</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
                       <Calendar size={14} className="text-primary-500 shrink-0" />
-                      <span>{selectedProgram.triwulan || 'N/A'}</span>
+                      <span>{getTriwulanRange(selectedProgram.triwulan, selectedProgram.period_id, periodList)}</span>
                     </span>
                   </div>
                   <div>
