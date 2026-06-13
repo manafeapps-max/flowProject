@@ -36,29 +36,32 @@ const getMonthName = (m?: number) => {
   return months[m - 1] || 'N/A';
 };
 
-const getTriwulanRange = (triwulan?: string, periodId?: string, periodList: Period[] = []) => {
-  if (!triwulan) return 'N/A';
-  const period = periodList.find(p => p.id === periodId);
-  if (!period) return triwulan;
-
+const getQuarterDateRange = (quarterNum: number, period: Period) => {
   const startDate = new Date(period.start_date);
-  if (isNaN(startDate.getTime())) return triwulan;
+  if (isNaN(startDate.getTime())) return `Q${quarterNum}`;
 
-  const startYear = startDate.getFullYear();
-  const endYear = startYear + 1;
+  const addMonths = (date: Date, months: number) => {
+    const d = new Date(date);
+    d.setMonth(d.getMonth() + months);
+    return d;
+  };
 
-  switch (triwulan.toUpperCase()) {
-    case 'Q1':
-      return `Q1 (01 April ${startYear} - 30 June ${startYear})`;
-    case 'Q2':
-      return `Q2 (01 July ${startYear} - 30 September ${startYear})`;
-    case 'Q3':
-      return `Q3 (01 October ${startYear} - 31 December ${startYear})`;
-    case 'Q4':
-      return `Q4 (01 January ${endYear} - 31 March ${endYear})`;
-    default:
-      return triwulan;
-  }
+  const formatDate = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+  };
+
+  const qStart = addMonths(startDate, (quarterNum - 1) * 3);
+  const nextQStart = addMonths(startDate, quarterNum * 3);
+  const qEnd = new Date(nextQStart.getTime() - 24 * 60 * 60 * 1000);
+
+  return `Q${quarterNum} (${formatDate(qStart)} - ${formatDate(qEnd)})`;
 };
 
 export default function ProgramsPage() {
@@ -440,13 +443,6 @@ export default function ProgramsPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block mb-1">Triwulan</span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                      <Calendar size={14} className="text-primary-500 shrink-0" />
-                      <span>{getTriwulanRange(selectedProgram.triwulan, selectedProgram.period_id, periodList)}</span>
-                    </span>
-                  </div>
-                  <div>
                     <span className="text-slate-400 block mb-1">Bulan</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
                       <Calendar size={14} className="text-primary-500 shrink-0" />
@@ -499,19 +495,30 @@ export default function ProgramsPage() {
                   <span className="text-slate-400 text-xs block mb-1 flex items-center gap-1">
                     <Clock size={14} className="text-primary-500 shrink-0" /> Waktu Pelaksanaan
                   </span>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                  <div className="flex flex-wrap gap-1.5 mt-1">
                     {selectedProgram.waktu ? (
-                      selectedProgram.waktu
-                        .split(',')
-                        .map((w: string) => {
-                          const trimmed = w.trim();
-                          return /^[1-4]$/.test(trimmed) ? `Q${trimmed}` : trimmed;
-                        })
-                        .join(', ')
+                      selectedProgram.waktu.split(',').map((w: string) => {
+                        const trimmed = w.trim();
+                        const quarterNum = parseInt(trimmed, 10);
+                        if (!isNaN(quarterNum) && quarterNum >= 1 && quarterNum <= 4) {
+                          const period = periodList.find(p => p.id === selectedProgram.period_id);
+                          const rangeStr = period ? getQuarterDateRange(quarterNum, period) : `Q${quarterNum}`;
+                          return (
+                            <div key={trimmed} className="text-xs text-slate-700 dark:text-slate-300 font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 w-fit">
+                              {rangeStr}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={trimmed} className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            {trimmed}
+                          </div>
+                        );
+                      })
                     ) : (
                       <span className="text-slate-400 italic font-normal">N/A</span>
                     )}
-                  </p>
+                  </div>
                 </div>
 
                 {/* Catatan Anggaran */}

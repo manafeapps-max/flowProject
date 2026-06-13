@@ -61,7 +61,6 @@ export interface Program {
   program_code?: string;
   tujuan_program?: string;
   tahun_anggaran?: string;
-  triwulan?: string;
   bulan?: number;
   frekuensi?: number;
   lokasi?: string;

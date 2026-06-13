@@ -113,7 +113,6 @@ CREATE TABLE programs (
     program_code VARCHAR(100),
     tujuan_program TEXT,
     tahun_anggaran VARCHAR(100),
-    triwulan VARCHAR(50),
     bulan INTEGER,
     frekuensi INTEGER DEFAULT 1,
     lokasi TEXT,

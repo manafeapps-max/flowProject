@@ -355,7 +355,7 @@ async function run() {
       INSERT INTO public.programs (
           id, period_id, name, status, pjp_unit_id, pic_membership_id, type_program_id, bidang_id, sub_bidang_id,
           anggaran_penerimaan, anggaran_pengeluaran,
-          program_code, tujuan_program, tahun_anggaran, triwulan, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, catatan_anggaran, waktu,
+          program_code, tujuan_program, tahun_anggaran, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, catatan_anggaran, waktu,
           created_at, updated_at
       )
       SELECT 
@@ -386,7 +386,6 @@ async function run() {
           ),
           p.tujuan_program,
           (SELECT name FROM public.periods WHERE id = p.periode_id),
-          p.triwulan,
           p.bulan,
           p.frekuensi,
           p.lokasi,
