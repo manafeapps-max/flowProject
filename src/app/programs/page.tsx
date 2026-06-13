@@ -499,19 +499,11 @@ export default function ProgramsPage() {
                     {selectedProgram.waktu ? (
                       selectedProgram.waktu.split(',').map((w: string) => {
                         const trimmed = w.trim();
-                        const quarterNum = parseInt(trimmed, 10);
-                        if (!isNaN(quarterNum) && quarterNum >= 1 && quarterNum <= 4) {
-                          const period = periodList.find(p => p.id === selectedProgram.period_id);
-                          const rangeStr = period ? getQuarterDateRange(quarterNum, period) : `Q${quarterNum}`;
-                          return (
-                            <div key={trimmed} className="text-xs text-slate-700 dark:text-slate-300 font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 w-fit">
-                              {rangeStr}
-                            </div>
-                          );
-                        }
+                        const isQuarter = /^[1-4]$/.test(trimmed);
+                        const displayStr = isQuarter ? `Q${trimmed}` : trimmed;
                         return (
-                          <div key={trimmed} className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                            {trimmed}
+                          <div key={trimmed} className="text-xs text-slate-700 dark:text-slate-300 font-semibold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 w-fit">
+                            {displayStr}
                           </div>
                         );
                       })
