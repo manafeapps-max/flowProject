@@ -6,7 +6,7 @@ import { db, Program, AnggaranProgram, Period } from "@/lib/db";
 import { 
   Briefcase, Plus, Filter, CircleArrowRight, CheckCircle2, Clock, X, 
   TrendingUp, TrendingDown, Coins, HelpCircle, Trash2, Calendar,
-  MapPin, Target, FileText, Award, Layers, User
+  MapPin, Target, FileText, Award, Layers, User, Edit3
 } from "lucide-react";
 
 const getStatusColor = (status: string) => {
@@ -75,11 +75,23 @@ export default function ProgramsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [showAddBudgetModal, setShowAddBudgetModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Program Form
+  const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
   const [unitId, setUnitId] = useState("");
-  const [budgetVal, setBudgetVal] = useState("0");
+  const [bidangId, setBidangId] = useState("");
+  const [subBidangId, setSubBidangId] = useState("");
+  const [typeProgramId, setTypeProgramId] = useState("");
+  const [tahunAnggaran, setTahunAnggaran] = useState("");
+  const [bulan, setBulan] = useState("");
+  const [waktuQuarters, setWaktuQuarters] = useState({ Q1: false, Q2: false, Q3: false, Q4: false });
+  const [progFrekuensi, setProgFrekuensi] = useState("1");
+  const [lokasi, setLokasi] = useState("");
+  const [tujuanProgram, setTujuanProgram] = useState("");
+  const [ikKualitatif, setIkKualitatif] = useState("");
+  const [deskripsi, setDeskripsi] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Budget Item Form
@@ -123,36 +135,179 @@ export default function ProgramsPage() {
     ].filter(Boolean).join('\n');
   };
 
+  const generateProgramCode = (
+    programId: string,
+    bId?: string,
+    sbId?: string,
+    tpId?: string
+  ) => {
+    const bidangName = bidangList.find(b => b.id === bId)?.name || 'GEN';
+    const subBidangName = subBidangList.find(s => s.id === sbId)?.name || 'GEN';
+    const typeProgramName = typeProgramList.find(t => t.id === tpId)?.name || 'GEN';
+
+    const clean = (str: string) => str.replace(/[^a-zA-Z0-9]+/g, '').toUpperCase();
+    const suffix = programId.slice(-8).toUpperCase();
+
+    return `${clean(bidangName)}-${clean(subBidangName)}-${clean(typeProgramName)}-${suffix}`;
+  };
+
+  const openAddModal = () => {
+    setName("");
+    setUnitId(unitList[0]?.id || "");
+    setBidangId(bidangList[0]?.id || "");
+    setSubBidangId(subBidangList[0]?.id || "");
+    setTypeProgramId(typeProgramList[0]?.id || "");
+    setTahunAnggaran("2026");
+    setBulan("");
+    setProgFrekuensi("1");
+    setLokasi("");
+    setTujuanProgram("");
+    setIkKualitatif("");
+    setDeskripsi("");
+    setWaktuQuarters({ Q1: false, Q2: false, Q3: false, Q4: false });
+    
+    setIsEditing(false);
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (prog: Program) => {
+    setName(prog.name || "");
+    setUnitId(prog.pjp_unit_id || "");
+    setBidangId(prog.bidang_id || "");
+    setSubBidangId(prog.sub_bidang_id || "");
+    setTypeProgramId(prog.type_program_id || "");
+    setTahunAnggaran(prog.tahun_anggaran || "");
+    setBulan(prog.bulan ? String(prog.bulan) : "");
+    setProgFrekuensi(prog.frekuensi ? String(prog.frekuensi) : "1");
+    setLokasi(prog.lokasi || "");
+    setTujuanProgram(prog.tujuan_program || "");
+    setIkKualitatif(prog.ik_kualitatif || "");
+    setDeskripsi(prog.deskripsi || "");
+    
+    const quarters = { Q1: false, Q2: false, Q3: false, Q4: false };
+    if (prog.waktu) {
+      prog.waktu.split(',').forEach(w => {
+        const trimmed = w.trim();
+        if (trimmed === '1') quarters.Q1 = true;
+        if (trimmed === '2') quarters.Q2 = true;
+        if (trimmed === '3') quarters.Q3 = true;
+        if (trimmed === '4') quarters.Q4 = true;
+      });
+    }
+    setWaktuQuarters(quarters);
+    
+    setIsEditing(true);
+    setShowAddModal(true);
+  };
+
   const handleAddProgram = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     
     setSubmitting(true);
     try {
-      const defaultUnit = unitList[0]?.id || "550e8400-e29b-41d4-a716-446655440020";
-      const selectedUnit = unitId || defaultUnit;
+      const progId = crypto.randomUUID();
+      const code = generateProgramCode(progId, bidangId, subBidangId, typeProgramId);
       
-      const newProgram = {
-        id: crypto.randomUUID(),
+      const selectedQuarters: string[] = [];
+      if (waktuQuarters.Q1) selectedQuarters.push('1');
+      if (waktuQuarters.Q2) selectedQuarters.push('2');
+      if (waktuQuarters.Q3) selectedQuarters.push('3');
+      if (waktuQuarters.Q4) selectedQuarters.push('4');
+      const waktuVal = selectedQuarters.length > 0 ? selectedQuarters.join(', ') : undefined;
+
+      const newProgram: Program = {
+        id: progId,
         period_id: "550e8400-e29b-41d4-a716-446655440000",
         name: name.trim(),
         status: "DRAFT" as const,
-        pjp_unit_id: selectedUnit,
+        pjp_unit_id: unitId || unitList[0]?.id || "550e8400-e29b-41d4-a716-446655440020",
         pic_membership_id: "de641feb-9990-4057-ba23-6c66253e2fa9",
-        budget: parseFloat(budgetVal) || 0,
+        bidang_id: bidangId || undefined,
+        sub_bidang_id: subBidangId || undefined,
+        type_program_id: typeProgramId || undefined,
+        program_code: code,
+        tujuan_program: tujuanProgram.trim() || undefined,
+        tahun_anggaran: tahunAnggaran.trim() || undefined,
+        bulan: bulan ? parseInt(bulan, 10) : undefined,
+        frekuensi: parseInt(progFrekuensi, 10) || 1,
+        lokasi: lokasi.trim() || undefined,
+        deskripsi: deskripsi.trim() || undefined,
+        ik_kualitatif: ikKualitatif.trim() || undefined,
+        waktu: waktuVal,
+        anggaran_penerimaan: 0,
+        anggaran_pengeluaran: 0,
         sync_status: "PENDING" as const,
       };
 
       await db.programs.add(newProgram);
-      
-      setName("");
-      setUnitId("");
-      setBudgetVal("0");
       setShowAddModal(false);
     } catch (err) {
       console.error("Failed to add program:", err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleUpdateProgram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProgram || !name.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const code = generateProgramCode(selectedProgram.id, bidangId, subBidangId, typeProgramId);
+      
+      const selectedQuarters: string[] = [];
+      if (waktuQuarters.Q1) selectedQuarters.push('1');
+      if (waktuQuarters.Q2) selectedQuarters.push('2');
+      if (waktuQuarters.Q3) selectedQuarters.push('3');
+      if (waktuQuarters.Q4) selectedQuarters.push('4');
+      const waktuVal = selectedQuarters.length > 0 ? selectedQuarters.join(', ') : null;
+
+      const updates: Partial<Program> = {
+        name: name.trim(),
+        pjp_unit_id: unitId || unitList[0]?.id || "550e8400-e29b-41d4-a716-446655440020",
+        bidang_id: bidangId || undefined,
+        sub_bidang_id: subBidangId || undefined,
+        type_program_id: typeProgramId || undefined,
+        program_code: code,
+        tujuan_program: tujuanProgram.trim() || undefined,
+        tahun_anggaran: tahunAnggaran.trim() || undefined,
+        bulan: bulan ? parseInt(bulan, 10) : undefined,
+        frekuensi: parseInt(progFrekuensi, 10) || 1,
+        lokasi: lokasi.trim() || undefined,
+        deskripsi: deskripsi.trim() || undefined,
+        ik_kualitatif: ikKualitatif.trim() || undefined,
+        waktu: waktuVal || undefined,
+        sync_status: "PENDING" as const,
+      };
+
+      await db.programs.update(selectedProgram.id, updates);
+      
+      setSelectedProgram(prev => prev ? { ...prev, ...updates } : null);
+      setShowAddModal(false);
+    } catch (err) {
+      console.error("Failed to update program:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteProgram = async () => {
+    if (!selectedProgram) return;
+
+    try {
+      const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
+      for (const line of programBudgetLines) {
+        await db.anggaran_program.delete(line.id);
+      }
+
+      await db.programs.delete(selectedProgram.id);
+
+      setSelectedProgram(null);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error("Failed to delete program:", err);
     }
   };
 
@@ -262,7 +417,7 @@ export default function ProgramsPage() {
             <Filter size={20} />
           </button>
           <button 
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="bg-primary-600 text-white p-3 rounded-full shadow-lg shadow-primary-500/30 active:scale-95 transition-transform"
           >
             <Plus size={20} />
@@ -314,70 +469,243 @@ export default function ProgramsPage() {
         )}
       </section>
 
-      {/* Program Add Modal */}
+      {/* Program Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-surface border border-border rounded-3xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button 
               onClick={() => setShowAddModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
             >
               <X size={20} />
             </button>
-            <h2 className="text-xl font-bold mb-4">Add Program</h2>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Briefcase className="text-primary-600" />
+              {isEditing ? "Edit Program" : "Add Program"}
+            </h2>
             
-            <form onSubmit={handleAddProgram} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Program Name
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none animate-all"
-                  placeholder="e.g. Retreat Pemuda 2026"
-                />
+            <form onSubmit={isEditing ? handleUpdateProgram : handleAddProgram} className="space-y-4 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Column 1 */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Program Name *
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                      placeholder="e.g. Retreat Pemuda 2026"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Tipe Program
+                    </label>
+                    <select 
+                      value={typeProgramId}
+                      onChange={(e) => setTypeProgramId(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                    >
+                      <option value="">-- Choose Type --</option>
+                      {typeProgramList.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Bidang
+                    </label>
+                    <select 
+                      value={bidangId}
+                      onChange={(e) => setBidangId(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                    >
+                      <option value="">-- Choose Bidang --</option>
+                      {bidangList.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Sub-Bidang
+                    </label>
+                    <select 
+                      value={subBidangId}
+                      onChange={(e) => setSubBidangId(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                    >
+                      <option value="">-- Choose Sub-Bidang --</option>
+                      {subBidangList.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      PJP Unit (Penanggung Jawab)
+                    </label>
+                    <select 
+                      value={unitId}
+                      onChange={(e) => setUnitId(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                    >
+                      <option value="">-- Choose Unit --</option>
+                      {unitList.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Tahun Anggaran
+                      </label>
+                      <input 
+                        type="text" 
+                        value={tahunAnggaran}
+                        onChange={(e) => setTahunAnggaran(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                        placeholder="2026"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Bulan
+                      </label>
+                      <select 
+                        value={bulan}
+                        onChange={(e) => setBulan(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                      >
+                        <option value="">-- None --</option>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                          <option key={m} value={m}>{getMonthName(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column 2 */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Frekuensi
+                      </label>
+                      <input 
+                        type="number" 
+                        min="1"
+                        value={progFrekuensi}
+                        onChange={(e) => setProgFrekuensi(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Lokasi / Venue
+                      </label>
+                      <input 
+                        type="text" 
+                        value={lokasi}
+                        onChange={(e) => setLokasi(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                        placeholder="e.g. Daring, Jakarta"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                      Waktu Pelaksanaan (Quarters)
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
+                        <label 
+                          key={q}
+                          className={`flex flex-col items-center justify-center py-2 px-3 border rounded-2xl cursor-pointer text-xs font-bold transition-all ${
+                            waktuQuarters[q] 
+                              ? 'bg-primary-50 border-primary-500 text-primary-700 dark:bg-primary-950/20 dark:border-primary-800' 
+                              : 'bg-background border-border text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <input 
+                            type="checkbox"
+                            className="sr-only"
+                            checked={waktuQuarters[q]}
+                            onChange={(e) => setWaktuQuarters(prev => ({ ...prev, [q]: e.target.checked }))}
+                          />
+                          <span>{q}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Tujuan Program
+                    </label>
+                    <textarea 
+                      value={tujuanProgram}
+                      onChange={(e) => setTujuanProgram(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                      placeholder="Program goals..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Indikator Kinerja Kualitatif
+                    </label>
+                    <textarea 
+                      value={ikKualitatif}
+                      onChange={(e) => setIkKualitatif(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                      placeholder="Expected quality results..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Deskripsi
+                    </label>
+                    <textarea 
+                      value={deskripsi}
+                      onChange={(e) => setDeskripsi(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                      placeholder="Additional details..."
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Responsible Sub-Bidang
-                </label>
-                <select 
-                  value={unitId}
-                  onChange={(e) => setUnitId(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+              <div className="pt-4 border-t border-border flex justify-end gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-6 py-3 border border-border rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40"
                 >
-                  <option value="">-- Choose Unit --</option>
-                  {unitList.map(unit => (
-                    <option key={unit.id} value={unit.id}>{unit.name}</option>
-                  ))}
-                </select>
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-primary-500/20 active:scale-95 flex items-center gap-1.5"
+                >
+                  {submitting ? "Saving..." : (isEditing ? "Save Changes" : "Create Program")}
+                </button>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Est. Budget (Rp)
-                </label>
-                <input 
-                  type="number" 
-                  required
-                  value={budgetVal}
-                  onChange={(e) => setBudgetVal(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  placeholder="0"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 mt-2 shadow-lg shadow-primary-500/20 active:scale-95"
-              >
-                {submitting ? "Adding..." : "Add Program"}
-              </button>
             </form>
           </div>
         </div>
@@ -394,12 +722,28 @@ export default function ProgramsPage() {
                 </span>
                 <h2 className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{selectedProgram.name}</h2>
               </div>
-              <button 
-                onClick={() => setSelectedProgram(null)}
-                className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button 
+                  onClick={() => openEditModal(selectedProgram)}
+                  title="Edit Program"
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-primary-600 transition-colors"
+                >
+                  <Edit3 size={18} />
+                </button>
+                <button 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete Program"
+                  className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 hover:text-red-600 transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
+                <button 
+                  onClick={() => setSelectedProgram(null)}
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors ml-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </header>
 
             <div className="flex-1 p-6 space-y-6 overflow-y-auto">
@@ -801,6 +1145,39 @@ export default function ProgramsPage() {
                 {submitting ? "Adding..." : "Add Budget Line"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Program Confirmation Modal */}
+      {showDeleteConfirm && selectedProgram && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-surface border border-border rounded-3xl w-full max-w-sm p-6 shadow-2xl relative text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/20 text-red-600 flex items-center justify-center animate-bounce">
+              <Trash2 size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Delete Program?</h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                Are you sure you want to delete <span className="font-semibold text-slate-700 dark:text-slate-300">"{selectedProgram.name}"</span>?
+                This action is permanent and will cascade-delete all its detailed budget lines.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-3 border border-border rounded-2xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={handleDeleteProgram}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-semibold shadow-lg shadow-red-500/10 active:scale-95 transition-all"
+              >
+                Delete Program
+              </button>
+            </div>
           </div>
         </div>
       )}
