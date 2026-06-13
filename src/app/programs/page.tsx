@@ -471,226 +471,231 @@ export default function ProgramsPage() {
 
       {/* Program Add/Edit Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
-            <button 
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Briefcase className="text-primary-600" />
-              {isEditing ? "Edit Program" : "Add Program"}
-            </h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[60] animate-fade-in">
+          <div className="bg-surface border-l border-border w-full max-w-xl h-full flex flex-col shadow-2xl relative animate-slide-left">
+            <header className="p-6 border-b border-border flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Briefcase className="text-primary-600" />
+                {isEditing ? "Edit Program" : "Add Program"}
+              </h2>
+              <button 
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </header>
             
-            <form onSubmit={isEditing ? handleUpdateProgram : handleAddProgram} className="space-y-4 flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Column 1 */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Program Name *
-                    </label>
-                    <input 
-                      type="text" 
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                      placeholder="e.g. Retreat Pemuda 2026"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Tipe Program
-                    </label>
-                    <select 
-                      value={typeProgramId}
-                      onChange={(e) => setTypeProgramId(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                    >
-                      <option value="">-- Choose Type --</option>
-                      {typeProgramList.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Bidang
-                    </label>
-                    <select 
-                      value={bidangId}
-                      onChange={(e) => setBidangId(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                    >
-                      <option value="">-- Choose Bidang --</option>
-                      {bidangList.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Sub-Bidang
-                    </label>
-                    <select 
-                      value={subBidangId}
-                      onChange={(e) => setSubBidangId(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                    >
-                      <option value="">-- Choose Sub-Bidang --</option>
-                      {subBidangList.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      PJP Unit (Penanggung Jawab)
-                    </label>
-                    <select 
-                      value={unitId}
-                      onChange={(e) => setUnitId(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                    >
-                      <option value="">-- Choose Unit --</option>
-                      {unitList.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={isEditing ? handleUpdateProgram : handleAddProgram} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Column 1 */}
+                  <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Tahun Anggaran
+                        Program Name *
                       </label>
                       <input 
                         type="text" 
-                        value={tahunAnggaran}
-                        onChange={(e) => setTahunAnggaran(e.target.value)}
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                        placeholder="2026"
+                        placeholder="e.g. Retreat Pemuda 2026"
                       />
                     </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Bulan
+                        Tipe Program
                       </label>
                       <select 
-                        value={bulan}
-                        onChange={(e) => setBulan(e.target.value)}
+                        value={typeProgramId}
+                        onChange={(e) => setTypeProgramId(e.target.value)}
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
                       >
-                        <option value="">-- None --</option>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                          <option key={m} value={m}>{getMonthName(m)}</option>
+                        <option value="">-- Choose Type --</option>
+                        {typeProgramList.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
                     </div>
-                  </div>
-                </div>
 
-                {/* Column 2 */}
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Frekuensi
+                        Bidang
                       </label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={progFrekuensi}
-                        onChange={(e) => setProgFrekuensi(e.target.value)}
+                      <select 
+                        value={bidangId}
+                        onChange={(e) => setBidangId(e.target.value)}
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                      />
+                      >
+                        <option value="">-- Choose Bidang --</option>
+                        {bidangList.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
                     </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Lokasi / Venue
+                        Sub-Bidang
                       </label>
-                      <input 
-                        type="text" 
-                        value={lokasi}
-                        onChange={(e) => setLokasi(e.target.value)}
+                      <select 
+                        value={subBidangId}
+                        onChange={(e) => setSubBidangId(e.target.value)}
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                        placeholder="e.g. Daring, Jakarta"
-                      />
+                      >
+                        <option value="">-- Choose Sub-Bidang --</option>
+                        {subBidangList.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
-                      Waktu Pelaksanaan (Quarters)
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
-                        <label 
-                          key={q}
-                          className={`flex flex-col items-center justify-center py-2 px-3 border rounded-2xl cursor-pointer text-xs font-bold transition-all ${
-                            waktuQuarters[q] 
-                              ? 'bg-primary-50 border-primary-500 text-primary-700 dark:bg-primary-950/20 dark:border-primary-800' 
-                              : 'bg-background border-border text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                          }`}
-                        >
-                          <input 
-                            type="checkbox"
-                            className="sr-only"
-                            checked={waktuQuarters[q]}
-                            onChange={(e) => setWaktuQuarters(prev => ({ ...prev, [q]: e.target.checked }))}
-                          />
-                          <span>{q}</span>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        PJP Unit (Penanggung Jawab)
+                      </label>
+                      <select 
+                        value={unitId}
+                        onChange={(e) => setUnitId(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                      >
+                        <option value="">-- Choose Unit --</option>
+                        {unitList.map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                          Tahun Anggaran
                         </label>
-                      ))}
+                        <input 
+                          type="text" 
+                          value={tahunAnggaran}
+                          onChange={(e) => setTahunAnggaran(e.target.value)}
+                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                          placeholder="2026"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                          Bulan
+                        </label>
+                        <select 
+                          value={bulan}
+                          onChange={(e) => setBulan(e.target.value)}
+                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                        >
+                          <option value="">-- None --</option>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                            <option key={m} value={m}>{getMonthName(m)}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Tujuan Program
-                    </label>
-                    <textarea 
-                      value={tujuanProgram}
-                      onChange={(e) => setTujuanProgram(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
-                      placeholder="Program goals..."
-                    />
-                  </div>
+                  {/* Column 2 */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                          Frekuensi
+                        </label>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={progFrekuensi}
+                          onChange={(e) => setProgFrekuensi(e.target.value)}
+                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                          Lokasi / Venue
+                        </label>
+                        <input 
+                          type="text" 
+                          value={lokasi}
+                          onChange={(e) => setLokasi(e.target.value)}
+                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                          placeholder="e.g. Daring, Jakarta"
+                        />
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Indikator Kinerja Kualitatif
-                    </label>
-                    <textarea 
-                      value={ikKualitatif}
-                      onChange={(e) => setIkKualitatif(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
-                      placeholder="Expected quality results..."
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                        Waktu Pelaksanaan (Quarters)
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
+                          <label 
+                            key={q}
+                            className={`flex flex-col items-center justify-center py-2 px-3 border rounded-2xl cursor-pointer text-xs font-bold transition-all ${
+                              waktuQuarters[q] 
+                                ? 'bg-primary-600 border-primary-600 text-white dark:bg-primary-500 dark:border-primary-500 dark:text-white' 
+                                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              className="sr-only"
+                              checked={waktuQuarters[q]}
+                              onChange={(e) => setWaktuQuarters(prev => ({ ...prev, [q]: e.target.checked }))}
+                            />
+                            <span>{q}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Deskripsi
-                    </label>
-                    <textarea 
-                      value={deskripsi}
-                      onChange={(e) => setDeskripsi(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
-                      placeholder="Additional details..."
-                    />
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Tujuan Program
+                      </label>
+                      <textarea 
+                        value={tujuanProgram}
+                        onChange={(e) => setTujuanProgram(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                        placeholder="Program goals..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Indikator Kinerja Kualitatif
+                      </label>
+                      <textarea 
+                        value={ikKualitatif}
+                        onChange={(e) => setIkKualitatif(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                        placeholder="Expected quality results..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Deskripsi
+                      </label>
+                      <textarea 
+                        value={deskripsi}
+                        onChange={(e) => setDeskripsi(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
+                        placeholder="Additional details..."
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-border flex justify-end gap-3">
+              <div className="p-6 border-t border-border bg-surface flex justify-end gap-3 shrink-0">
                 <button 
                   type="button"
                   onClick={() => setShowAddModal(false)}
