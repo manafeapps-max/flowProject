@@ -22,14 +22,6 @@ export default function Navigation() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border pb-safe">
-      {user && (
-        <div className="bg-slate-50 dark:bg-slate-850/80 border-b border-border py-1 px-4 text-[10px] text-slate-500 dark:text-slate-400 flex justify-between items-center max-w-md mx-auto">
-          <span className="truncate font-medium">User: {user.email}</span>
-          <span className="font-bold text-primary-600 dark:text-primary-400 font-mono text-[9px] bg-primary-50 dark:bg-primary-950/40 px-1.5 py-0.5 rounded border border-primary-100 dark:border-primary-900/60 uppercase">
-            {currentUserRole?.replace('_', ' ') || 'No Role'}
-          </span>
-        </div>
-      )}
       <div className="flex justify-between items-center px-6 py-3 max-w-md mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
