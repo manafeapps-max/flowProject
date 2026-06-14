@@ -76,7 +76,7 @@ export default function ProgramsPage() {
   const units = useLiveQuery(() => db.organization_units.toArray());
   const typePrograms = useLiveQuery(() => db.type_program.toArray());
   const bidangs = useLiveQuery(() => db.bidang.toArray());
-  const subBidangs = useLiveQuery(() => db.organization_units.toArray().then(arr => arr.filter(u => u.parent_id !== null)));
+  const subBidangs = useLiveQuery(() => db.organization_units.toArray().then(arr => arr.filter(u => u.parent_id !== null || !!u.bidang_id)));
   const periods = useLiveQuery(() => db.periods.toArray());
   const programPPs = useLiveQuery(() => db.program_responsibility_pp.toArray()) || [];
 
@@ -211,6 +211,10 @@ export default function ProgramsPage() {
   const typeProgramList = typePrograms || [];
   const bidangList = bidangs || [];
   const subBidangList = subBidangs || [];
+  const formSubBidangList = subBidangList.filter(s => 
+    (s.bidang_id && s.bidang_id === bidangId) || 
+    (s.parent_id && s.parent_id === bidangId)
+  );
   const periodList = periods || [];
 
   // Query budget items dynamically for the selected program
@@ -746,7 +750,7 @@ export default function ProgramsPage() {
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
                       >
                         <option value="">-- Choose Sub-Bidang --</option>
-                        {subBidangList.map(s => (
+                        {formSubBidangList.map(s => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
                       </select>
