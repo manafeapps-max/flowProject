@@ -425,14 +425,72 @@ export async function syncAll() {
       const orphanedPPs = (await db.program_responsibility_pp.toArray()).filter(pp => !periodIds.has(pp.period_id));
       for (const pp of orphanedPPs) await db.program_responsibility_pp.delete(pp.id);
 
-      // Self-healing: Re-map occasions with errors or referencing invalid/unsynced periods to a valid active period
-      const activePeriod = periods.find(p => p.is_active) || periods[0];
-      if (activePeriod) {
-        const validPeriodIds = new Set(periods.filter(p => p.sync_status !== 'ERROR').map(p => p.id));
+      // Helper to determine period duration in years
+      const getDurationYears = (p: any) => {
+        const start = new Date(p.start_date);
+        const end = new Date(p.end_date);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+        return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      };
+
+      const membershipPeriods = periods.filter(p => getDurationYears(p) > 2);
+      const fiscalPeriods = periods.filter(p => getDurationYears(p) <= 2);
+      
+      const activeMembership = periods.find(p => p.is_active && getDurationYears(p) > 2) || membershipPeriods[0] || periods[0];
+      const activeFiscal = periods.find(p => p.is_active && getDurationYears(p) <= 2) || fiscalPeriods[0] || periods[0];
+
+      // Self-healing: Re-map child records with errors or referencing invalid/unsynced periods to valid active periods
+      const validPeriodIds = new Set(periods.filter(p => p.sync_status !== 'ERROR').map(p => p.id));
+
+      if (activeMembership) {
+        // 1. Bidang
+        const bidangs = await db.bidang.toArray();
+        for (const b of bidangs) {
+          if (!validPeriodIds.has(b.period_id) || b.sync_status === 'ERROR') {
+            await db.bidang.update(b.id, { period_id: activeMembership.id, sync_status: 'PENDING' });
+          }
+        }
+
+        // 2. Organization Units
+        const units = await db.organization_units.toArray();
+        for (const u of units) {
+          if (!validPeriodIds.has(u.period_id) || u.sync_status === 'ERROR') {
+            await db.organization_units.update(u.id, { period_id: activeMembership.id, sync_status: 'PENDING' });
+          }
+        }
+
+        // 3. Unit Members
+        const unitMembers = await db.unit_members.toArray();
+        for (const um of unitMembers) {
+          if (!validPeriodIds.has(um.period_id) || um.sync_status === 'ERROR') {
+            await db.unit_members.update(um.id, { period_id: activeMembership.id, sync_status: 'PENDING' });
+          }
+        }
+
+        // 4. User Roles
+        const userRoles = await db.user_roles.toArray();
+        for (const ur of userRoles) {
+          if (!validPeriodIds.has(ur.period_id) || ur.sync_status === 'ERROR') {
+            await db.user_roles.update(ur.id, { period_id: activeMembership.id, sync_status: 'PENDING' });
+          }
+        }
+
+        // 5. Program Responsibility PP
+        const pps = await db.program_responsibility_pp.toArray();
+        for (const pp of pps) {
+          if (!validPeriodIds.has(pp.period_id) || pp.sync_status === 'ERROR') {
+            await db.program_responsibility_pp.update(pp.id, { period_id: activeMembership.id, sync_status: 'PENDING' });
+          }
+        }
+      }
+
+      // 6. Occasions (Prefer fiscal active period, fallback to membership)
+      const targetOccasionPeriod = activeFiscal || activeMembership;
+      if (targetOccasionPeriod) {
         const occasions = await db.occasions.toArray();
         for (const o of occasions) {
           if (!validPeriodIds.has(o.period_id) || o.sync_status === 'ERROR') {
-            await db.occasions.update(o.id, { period_id: activePeriod.id, sync_status: 'PENDING' });
+            await db.occasions.update(o.id, { period_id: targetOccasionPeriod.id, sync_status: 'PENDING' });
           }
         }
       }
