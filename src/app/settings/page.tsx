@@ -363,15 +363,80 @@ export default function SettingsPage() {
   const handleDeletePeriod = async (id: string) => {
     if (confirm("Delete this period?")) {
       try {
-        await db.transaction('rw', [db.periods, db.bidang, db.organization_units, db.deleted_records], async () => {
-          const bids = bidangList.filter(b => b.period_id === id);
-          const orgs = unitList.filter(u => u.period_id === id);
-          for (const b of bids) { await db.bidang.delete(b.id); await db.deleted_records.add({ id: b.id, table_name: 'bidang', sync_status: 'PENDING' }); }
-          for (const u of orgs) { await db.organization_units.delete(u.id); await db.deleted_records.add({ id: u.id, table_name: 'organization_units', sync_status: 'PENDING' }); }
+        await db.transaction('rw', [
+          db.periods,
+          db.bidang,
+          db.organization_units,
+          db.user_roles,
+          db.unit_members,
+          db.program_responsibility_pp,
+          db.occasions,
+          db.programs,
+          db.anggaran_program,
+          db.deleted_records
+        ], async () => {
+          // 1. Bidang
+          const bids = await db.bidang.where('period_id').equals(id).toArray();
+          for (const b of bids) {
+            await db.bidang.delete(b.id);
+            await db.deleted_records.add({ id: b.id, table_name: 'bidang', sync_status: 'PENDING' });
+          }
+
+          // 2. Organization Units
+          const orgs = await db.organization_units.where('period_id').equals(id).toArray();
+          for (const u of orgs) {
+            await db.organization_units.delete(u.id);
+            await db.deleted_records.add({ id: u.id, table_name: 'organization_units', sync_status: 'PENDING' });
+          }
+
+          // 3. User Roles
+          const roles = await db.user_roles.where('period_id').equals(id).toArray();
+          for (const r of roles) {
+            await db.user_roles.delete(r.id);
+            await db.deleted_records.add({ id: r.id, table_name: 'user_role', sync_status: 'PENDING' });
+          }
+
+          // 4. Unit Members
+          const ums = await db.unit_members.where('period_id').equals(id).toArray();
+          for (const um of ums) {
+            await db.unit_members.delete(um.id);
+            await db.deleted_records.add({ id: um.id, table_name: 'unit_members', sync_status: 'PENDING' });
+          }
+
+          // 5. Program Responsibility PP
+          const pps = await db.program_responsibility_pp.where('period_id').equals(id).toArray();
+          for (const pp of pps) {
+            await db.program_responsibility_pp.delete(pp.id);
+            await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
+          }
+
+          // 6. Occasions
+          const occs = await db.occasions.where('period_id').equals(id).toArray();
+          for (const o of occs) {
+            await db.occasions.delete(o.id);
+            await db.deleted_records.add({ id: o.id, table_name: 'occasions', sync_status: 'PENDING' });
+          }
+
+          // 7. Programs & Anggaran Program
+          const progs = await db.programs.where('period_id').equals(id).toArray();
+          for (const pr of progs) {
+            // Delete associated budgets
+            const budgets = await db.anggaran_program.where('program_id').equals(pr.id).toArray();
+            for (const b of budgets) {
+              await db.anggaran_program.delete(b.id);
+              await db.deleted_records.add({ id: b.id, table_name: 'anggaran_program', sync_status: 'PENDING' });
+            }
+            await db.programs.delete(pr.id);
+            await db.deleted_records.add({ id: pr.id, table_name: 'programs', sync_status: 'PENDING' });
+          }
+
+          // 8. Finally delete period
           await db.periods.delete(id);
           await db.deleted_records.add({ id, table_name: 'periods', sync_status: 'PENDING' });
         });
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error('Delete period failed:', e);
+      }
     }
   };
 

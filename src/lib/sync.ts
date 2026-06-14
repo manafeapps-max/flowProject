@@ -236,6 +236,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = u;
       const { error } = await supabase.from('organization_units').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(u.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned unit ${id} because its period ${u.period_id} does not exist on Supabase.`);
+            await db.organization_units.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.organization_units.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing unit ${id}:`, error.message);
@@ -250,6 +258,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = pr;
       const { error } = await supabase.from('programs').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(pr.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned program ${id} because its period ${pr.period_id} does not exist on Supabase.`);
+            await db.programs.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.programs.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing program ${id}:`, error.message);
@@ -278,6 +294,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = bd;
       const { error } = await supabase.from('bidang').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(bd.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned bidang ${id} because its period ${bd.period_id} does not exist on Supabase.`);
+            await db.bidang.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.bidang.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing bidang ${id}:`, error.message);
@@ -292,6 +316,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, sub_total, ...rest } = b;
       const { error } = await supabase.from('anggaran_program').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('program_id_fkey')) {
+          const program = await db.programs.get(b.program_id);
+          if (!program || program.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned budget line ${id} because its program ${b.program_id} does not exist on Supabase.`);
+            await db.anggaran_program.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.anggaran_program.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing budget line ${id}:`, error.message);
@@ -320,6 +352,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = um;
       const { error } = await supabase.from('unit_members').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(um.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned unit_member ${id} because its period ${um.period_id} does not exist on Supabase.`);
+            await db.unit_members.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.unit_members.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing unit_member ${id}:`, error.message);
@@ -334,6 +374,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = ur;
       const { error } = await supabase.from('user_role').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(ur.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned user role ${id} because its period ${ur.period_id} does not exist on Supabase.`);
+            await db.user_roles.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.user_roles.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing user role ${id}:`, error.message);
@@ -348,6 +396,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = pp;
       const { error } = await supabase.from('program_responsibility_pp').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(pp.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned program_responsibility_pp ${id} because its period ${pp.period_id} does not exist on Supabase.`);
+            await db.program_responsibility_pp.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.program_responsibility_pp.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing program_responsibility_pp ${id}:`, error.message);
@@ -362,6 +418,14 @@ export async function syncPush(): Promise<boolean> {
       const { id, sync_status, ...rest } = o;
       const { error } = await supabase.from('occasions').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(o.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned occasion ${id} because its period ${o.period_id} does not exist on Supabase.`);
+            await db.occasions.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
         await db.occasions.update(id, { sync_status: 'ERROR' });
         console.error(`Error syncing occasion ${id}:`, error.message);
