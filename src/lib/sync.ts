@@ -468,9 +468,38 @@ export async function syncAll() {
   store.setSyncStatus('syncing');
 
   try {
-    // Self-healing: Cleanup any orphaned child records locally whose parent period was deleted
-    // This prevents foreign key constraint errors during push.
-    await db.transaction('rw', [db.periods, db.bidang, db.organization_units, db.unit_members, db.user_roles, db.program_responsibility_pp, db.occasions], async () => {
+    await db.transaction('rw', [db.periods, db.bidang, db.organization_units, db.unit_members, db.user_roles, db.program_responsibility_pp, db.occasions, db.programs, db.deleted_records], async () => {
+      // Self-healing: Reset any failed deletions in deleted_records to PENDING to retry them
+      const failedDeletes = await db.deleted_records.where('sync_status').equals('ERROR').toArray();
+      for (const fd of failedDeletes) {
+        await db.deleted_records.update(fd.id, { sync_status: 'PENDING' });
+      }
+
+      // Self-healing: Migrate legacy Pelkes bidang and unit IDs to the new BD02 PELKES
+      const OLD_BIDANG_ID = '550e8400-e29b-41d4-a716-446655440010';
+      const NEW_BIDANG_ID = '0afad6c9-335e-443c-904a-be6e797f8caa';
+      const UNIT_MAPPING: Record<string, string> = {
+        '550e8400-e29b-41d4-a716-446655440020': '47eb5df9-0d72-41f3-b165-3f096cb645ea', // Pelkes -> DPelkes
+        '550e8400-e29b-41d4-a716-446655440021': '1031ddce-5aae-4a77-a940-575bdf54a5f7', // UPB -> UPB
+        '550e8400-e29b-41d4-a716-446655440022': '56c5e437-2bf4-4cd8-8125-713e830291c6', // UP2M -> UP2M
+        '550e8400-e29b-41d4-a716-446655440023': '272f47c2-e43d-4681-9892-f97f18c25132'  // PMKI -> PMKI
+      };
+
+      const localProgs = await db.programs.toArray();
+      for (const p of localProgs) {
+        if (p.bidang_id === OLD_BIDANG_ID || p.pjp_bidang_id === OLD_BIDANG_ID) {
+          const updates: Partial<any> = {
+            bidang_id: NEW_BIDANG_ID,
+            pjp_bidang_id: NEW_BIDANG_ID,
+            sync_status: 'SYNCED'
+          };
+          if (p.sub_bidang_id && UNIT_MAPPING[p.sub_bidang_id]) {
+            updates.sub_bidang_id = UNIT_MAPPING[p.sub_bidang_id];
+          }
+          await db.programs.update(p.id, updates);
+        }
+      }
+
       const periods = await db.periods.toArray();
       const periodIds = new Set(periods.map(p => p.id));
       
