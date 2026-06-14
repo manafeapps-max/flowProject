@@ -437,21 +437,31 @@ export default function ProgramsPage() {
     if (!selectedProgram) return;
 
     try {
-      const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
-      for (const line of programBudgetLines) {
-        await db.anggaran_program.delete(line.id);
-      }
+      await db.transaction('rw', [db.programs, db.anggaran_program, db.program_responsibility_pp, db.deleted_records], async () => {
+        const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
+        for (const line of programBudgetLines) {
+          await db.anggaran_program.delete(line.id);
+          await db.deleted_records.add({ id: line.id, table_name: 'anggaran_program', sync_status: 'PENDING' });
+        }
 
-      const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
-      for (const pp of existingPPs) {
-        await db.program_responsibility_pp.delete(pp.id);
-        await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
-      }
+        const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
+        for (const pp of existingPPs) {
+          await db.program_responsibility_pp.delete(pp.id);
+          await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
+        }
 
-      await db.programs.delete(selectedProgram.id);
+        await db.programs.delete(selectedProgram.id);
+        await db.deleted_records.add({ id: selectedProgram.id, table_name: 'programs', sync_status: 'PENDING' });
+      });
 
       setSelectedProgram(null);
       setShowDeleteConfirm(false);
+
+      const isOnline = useAppStore.getState().isOnline;
+      if (isOnline) {
+        const { syncAll } = await import('@/lib/sync');
+        syncAll().catch(console.error);
+      }
     } catch (err) {
       console.error("Failed to delete program:", err);
     }
@@ -570,8 +580,17 @@ export default function ProgramsPage() {
     if (!canEditPrograms) return;
     if (!selectedProgram) return;
     try {
-      await db.anggaran_program.delete(id);
-      await recountProgramBudget(selectedProgram.id);
+      await db.transaction('rw', [db.anggaran_program, db.programs, db.deleted_records], async () => {
+        await db.anggaran_program.delete(id);
+        await db.deleted_records.add({ id, table_name: 'anggaran_program', sync_status: 'PENDING' });
+        await recountProgramBudget(selectedProgram.id);
+      });
+
+      const isOnline = useAppStore.getState().isOnline;
+      if (isOnline) {
+        const { syncAll } = await import('@/lib/sync');
+        syncAll().catch(console.error);
+      }
     } catch (err) {
       console.error("Failed to delete budget item:", err);
     }
