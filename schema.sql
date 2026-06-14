@@ -27,6 +27,7 @@ CREATE TABLE periods (
 CREATE TABLE organization_units (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
+    bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     parent_id UUID REFERENCES organization_units(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -53,6 +54,29 @@ CREATE TABLE positions (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(membership_id, period_id)
+);
+
+-- Members
+CREATE TABLE members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(100),
+    email VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Unit Members
+CREATE TABLE unit_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    unit_id UUID NOT NULL,
+    unit_type VARCHAR(50) NOT NULL,
+    role_title VARCHAR(255),
+    period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- IAM (Many-to-Many Roles)
@@ -103,7 +127,7 @@ CREATE TABLE programs (
     period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     status program_status_enum DEFAULT 'DRAFT',
-    pjp_unit_id UUID NOT NULL REFERENCES organization_units(id), -- Penanggung Jawab Program (Structural)
+    pjp_bidang_id UUID NOT NULL REFERENCES bidang(id), -- Penanggung Jawab Program (Structural)
     pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
     type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
     bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
@@ -128,9 +152,20 @@ CREATE TABLE programs (
 CREATE TABLE program_responsibility_pp (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
-    unit_id UUID NOT NULL REFERENCES organization_units(id) ON DELETE CASCADE,
+    bidang_id UUID NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
     period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
-    UNIQUE(program_id, unit_id)
+    UNIQUE(program_id, bidang_id)
+);
+
+-- Occasions
+CREATE TABLE occasions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    date DATE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Chart of Accounts (COA)
@@ -220,14 +255,14 @@ CREATE TRIGGER enforce_org_hierarchy_depth
     BEFORE INSERT OR UPDATE ON organization_units
     FOR EACH ROW EXECUTE FUNCTION check_org_hierarchy_depth();
 
--- B. Separation Guard: PJP.unit_id != PP.unit_id
+-- B. Separation Guard: PJP.bidang_id != PP.bidang_id
 CREATE OR REPLACE FUNCTION check_pjp_pp_separation() RETURNS TRIGGER AS $$
 DECLARE
-    v_pjp_unit_id UUID;
+    v_pjp_bidang_id UUID;
 BEGIN
-    SELECT pjp_unit_id INTO v_pjp_unit_id FROM programs WHERE id = NEW.program_id;
-    IF NEW.unit_id = v_pjp_unit_id THEN
-        RAISE EXCEPTION 'Separation Guard violated: PP unit cannot be the same as PJP unit.';
+    SELECT pjp_bidang_id INTO v_pjp_bidang_id FROM programs WHERE id = NEW.program_id;
+    IF NEW.bidang_id = v_pjp_bidang_id THEN
+        RAISE EXCEPTION 'Separation Guard violated: PP bidang cannot be the same as PJP bidang.';
     END IF;
     RETURN NEW;
 END;
@@ -241,10 +276,10 @@ CREATE OR REPLACE FUNCTION check_program_pjp_separation() RETURNS TRIGGER AS $$
 DECLARE
     v_pp_count INT;
 BEGIN
-    IF TG_OP = 'UPDATE' AND NEW.pjp_unit_id != OLD.pjp_unit_id THEN
-        SELECT COUNT(*) INTO v_pp_count FROM program_responsibility_pp WHERE program_id = NEW.id AND unit_id = NEW.pjp_unit_id;
+    IF TG_OP = 'UPDATE' AND NEW.pjp_bidang_id != OLD.pjp_bidang_id THEN
+        SELECT COUNT(*) INTO v_pp_count FROM program_responsibility_pp WHERE program_id = NEW.id AND bidang_id = NEW.pjp_bidang_id;
         IF v_pp_count > 0 THEN
-            RAISE EXCEPTION 'Separation Guard violated: New PJP unit is already assigned as a PP unit for this program.';
+            RAISE EXCEPTION 'Separation Guard violated: New PJP bidang is already assigned as a PP bidang for this program.';
         END IF;
     END IF;
     RETURN NEW;
@@ -319,6 +354,8 @@ ALTER TABLE periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_units ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE positions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE unit_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_role ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE program_responsibility_pp ENABLE ROW LEVEL SECURITY;
@@ -328,23 +365,36 @@ ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anggaran_program ENABLE ROW LEVEL SECURITY;
 ALTER TABLE type_program ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bidang ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sub_bidang ENABLE ROW LEVEL SECURITY;
+ALTER TABLE occasions ENABLE ROW LEVEL SECURITY;
 
 -- For MVP, allowing authenticated users to read and update. 
 -- In a real scenario, this would be locked down by specific policies derived from `user_role` and permissions.
-CREATE POLICY "Allow authenticated read" ON periods FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON organization_units FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON memberships FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON positions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON user_role FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON programs FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON program_responsibility_pp FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON coa FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON journals FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON journal_lines FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON anggaran_program FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON type_program FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON bidang FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read" ON sub_bidang FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read" ON periods FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON organization_units FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON memberships FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON positions FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON members FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON unit_members FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON user_role FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON programs FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON program_responsibility_pp FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON coa FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON journals FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON journal_lines FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON anggaran_program FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON type_program FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON bidang FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON occasions FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated write" ON occasions FOR ALL TO authenticated USING (true);
 
 -- (Write policies would follow matching user_roles, simplified for MVP setup)
+
+-- ==============================================================================
+-- 5. VIEWS
+-- ==============================================================================
+CREATE OR REPLACE VIEW public.user_profiles AS
+SELECT id, email
+FROM auth.users;
+
+GRANT SELECT ON public.user_profiles TO authenticated, anon;
+

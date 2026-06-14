@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, Program, AnggaranProgram, Period } from "@/lib/db";
+import { useAppStore } from "@/store/useAppStore";
 import { 
   Briefcase, Plus, Filter, CircleArrowRight, CheckCircle2, Clock, X, 
   TrendingUp, TrendingDown, Coins, HelpCircle, Trash2, Calendar,
@@ -64,13 +65,112 @@ const getQuarterDateRange = (quarterNum: number, period: Period) => {
   return `Q${quarterNum} (${formatDate(qStart)} - ${formatDate(qEnd)})`;
 };
 
+const formatNumberWithCommas = (value: string | number) => {
+  const clean = String(value).replace(/[^0-9]/g, '');
+  if (!clean) return "";
+  return parseInt(clean, 10).toLocaleString('en-US');
+};
+
 export default function ProgramsPage() {
   const programs = useLiveQuery(() => db.programs.toArray());
   const units = useLiveQuery(() => db.organization_units.toArray());
   const typePrograms = useLiveQuery(() => db.type_program.toArray());
   const bidangs = useLiveQuery(() => db.bidang.toArray());
-  const subBidangs = useLiveQuery(() => db.sub_bidang.toArray());
+  const subBidangs = useLiveQuery(() => db.organization_units.toArray().then(arr => arr.filter(u => u.parent_id !== null)));
   const periods = useLiveQuery(() => db.periods.toArray());
+  const programPPs = useLiveQuery(() => db.program_responsibility_pp.toArray()) || [];
+
+  const getPeriodDurationYears = (p: Period) => {
+    const start = new Date(p.start_date);
+    const end = new Date(p.end_date);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+    return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  };
+
+  const activeFiscalPeriod = (periods || []).find(p => p.is_active && getPeriodDurationYears(p) <= 2) || (periods || []).filter(p => getPeriodDurationYears(p) <= 2)[0];
+  const activeMembershipPeriod = (periods || []).find(p => p.is_active && getPeriodDurationYears(p) > 2) || (periods || []).filter(p => getPeriodDurationYears(p) > 2)[0];
+  const activePeriod = activeMembershipPeriod || activeFiscalPeriod || (periods || [])[0];
+
+  const currentUser = useAppStore(state => state.user);
+  const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
+  const currentUserRole = useAppStore(state => state.currentUserRole);
+
+  const userRolesList = useLiveQuery(() => db.user_roles.toArray()) || [];
+  const userProfilesList = useLiveQuery(() => db.user_profiles.toArray()) || [];
+
+  const myRoles = useLiveQuery(
+    () => currentUser && activePeriod ? db.user_roles.where({ user_id: currentUser.id, period_id: activePeriod.id }).toArray() : Promise.resolve<any[]>([]),
+    [currentUser, activePeriod]
+  );
+
+  useEffect(() => {
+    if (myRoles && myRoles.length > 0) {
+      setCurrentUserRole(myRoles[0].role);
+    } else if (currentUser && (currentUser.email === 'benmanafe48@gmail.com' || currentUser.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
+      setCurrentUserRole('SYSTEM_OWNER');
+    } else {
+      setCurrentUserRole(null);
+    }
+  }, [myRoles, currentUser, activePeriod, userRolesList, setCurrentUserRole]);
+
+  // One-off migration: update any program's pjp_bidang_id to PELKES if it's not already
+  useEffect(() => {
+    const runLocalMigration = async () => {
+      try {
+        const isMigrated = localStorage.getItem("pjp_migrated_to_pelkes_v1");
+        if (isMigrated === "true") return;
+
+        const PELKES_BIDANG_ID = '550e8400-e29b-41d4-a716-446655440010';
+        const localPrograms = await db.programs.toArray();
+        let updated = 0;
+
+        for (const prog of localPrograms) {
+          if (prog.pjp_bidang_id !== PELKES_BIDANG_ID) {
+            await db.programs.update(prog.id, {
+              pjp_bidang_id: PELKES_BIDANG_ID,
+              sync_status: 'PENDING'
+            });
+            updated++;
+          }
+        }
+
+        console.log(`Local PJP to PELKES migration: updated ${updated} programs.`);
+        localStorage.setItem("pjp_migrated_to_pelkes_v1", "true");
+
+        if (updated > 0) {
+          const { syncAll } = await import("@/lib/sync");
+          syncAll();
+        }
+      } catch (err) {
+        console.error("Local PJP migration failed:", err);
+      }
+    };
+
+    runLocalMigration();
+  }, []);
+
+  const canEditPrograms = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN' || currentUserRole === 'STAFF' || currentUserRole === 'BENDAHARA';
+  const isGlobalAdmin = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN';
+
+  // Retrieve current user unit assignments
+  const userAssignments = useLiveQuery(
+    async () => {
+      if (!currentUser || !currentUser.email || !activeMembershipPeriod) return [];
+      const member = await db.members.where('email').equalsIgnoreCase(currentUser.email).first();
+      if (!member) return [];
+      return db.unit_members.where({ member_id: member.id, period_id: activeMembershipPeriod.id }).toArray();
+    },
+    [currentUser, activeMembershipPeriod]
+  ) || [];
+
+  const myBidangIds = (userAssignments || []).map(a => {
+    if (a.unit_type === 'BIDANG') return a.unit_id;
+    if (a.unit_type === 'UNIT') {
+      const u = (units || []).find(unit => unit.id === a.unit_id);
+      return u?.bidang_id;
+    }
+    return null;
+  }).filter(Boolean) as string[];
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
@@ -80,7 +180,8 @@ export default function ProgramsPage() {
   // Program Form
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
-  const [unitId, setUnitId] = useState("");
+  const [pjpBidangId, setPjpBidangId] = useState("");
+  const [ppBidangIds, setPpBidangIds] = useState<string[]>([]);
   const [bidangId, setBidangId] = useState("");
   const [subBidangId, setSubBidangId] = useState("");
   const [typeProgramId, setTypeProgramId] = useState("");
@@ -95,6 +196,7 @@ export default function ProgramsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Budget Item Form
+  const [editingBudgetItem, setEditingBudgetItem] = useState<AnggaranProgram | null>(null);
   const [budgetItemName, setBudgetItemName] = useState("");
   const [jenisAnggaran, setJenisAnggaran] = useState<'PENERIMAAN' | 'PENGELUARAN'>('PENGELUARAN');
   const [volume, setVolume] = useState("1");
@@ -153,11 +255,13 @@ export default function ProgramsPage() {
 
   const openAddModal = () => {
     setName("");
-    setUnitId(unitList[0]?.id || "");
-    setBidangId(bidangList[0]?.id || "");
+    const initialBidangId = (!isGlobalAdmin && myBidangIds.length > 0) ? myBidangIds[0] : (bidangList[0]?.id || "");
+    setPjpBidangId(initialBidangId);
+    setPpBidangIds([]);
+    setBidangId(initialBidangId);
     setSubBidangId(subBidangList[0]?.id || "");
     setTypeProgramId(typeProgramList[0]?.id || "");
-    setTahunAnggaran("2026");
+    setTahunAnggaran(activeFiscalPeriod?.name || "2026");
     setBulan("");
     setProgFrekuensi("1");
     setLokasi("");
@@ -172,7 +276,10 @@ export default function ProgramsPage() {
 
   const openEditModal = (prog: Program) => {
     setName(prog.name || "");
-    setUnitId(prog.pjp_unit_id || "");
+    setPjpBidangId(prog.pjp_bidang_id || "");
+    db.program_responsibility_pp.where('program_id').equals(prog.id).toArray().then(pps => {
+      setPpBidangIds(pps.map(pp => pp.bidang_id));
+    });
     setBidangId(prog.bidang_id || "");
     setSubBidangId(prog.sub_bidang_id || "");
     setTypeProgramId(prog.type_program_id || "");
@@ -202,6 +309,7 @@ export default function ProgramsPage() {
 
   const handleAddProgram = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditPrograms) return;
     if (!name.trim()) return;
     
     setSubmitting(true);
@@ -216,13 +324,17 @@ export default function ProgramsPage() {
       if (waktuQuarters.Q4) selectedQuarters.push('4');
       const waktuVal = selectedQuarters.length > 0 ? selectedQuarters.join(', ') : undefined;
 
+      const member = currentUser && currentUser.email 
+        ? await db.members.where('email').equalsIgnoreCase(currentUser.email).first()
+        : null;
+
       const newProgram: Program = {
         id: progId,
-        period_id: "550e8400-e29b-41d4-a716-446655440000",
+        period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
         name: name.trim(),
         status: "DRAFT" as const,
-        pjp_unit_id: unitId || unitList[0]?.id || "550e8400-e29b-41d4-a716-446655440020",
-        pic_membership_id: "de641feb-9990-4057-ba23-6c66253e2fa9",
+        pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
+        pic_membership_id: member?.id || "de641feb-9990-4057-ba23-6c66253e2fa9",
         bidang_id: bidangId || undefined,
         sub_bidang_id: subBidangId || undefined,
         type_program_id: typeProgramId || undefined,
@@ -241,6 +353,16 @@ export default function ProgramsPage() {
       };
 
       await db.programs.add(newProgram);
+
+      for (const bId of ppBidangIds) {
+        await db.program_responsibility_pp.add({
+          id: crypto.randomUUID(),
+          program_id: progId,
+          bidang_id: bId,
+          period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
+          sync_status: 'PENDING'
+        });
+      }
       setShowAddModal(false);
     } catch (err) {
       console.error("Failed to add program:", err);
@@ -251,6 +373,7 @@ export default function ProgramsPage() {
 
   const handleUpdateProgram = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditPrograms) return;
     if (!selectedProgram || !name.trim()) return;
 
     setSubmitting(true);
@@ -266,7 +389,7 @@ export default function ProgramsPage() {
 
       const updates: Partial<Program> = {
         name: name.trim(),
-        pjp_unit_id: unitId || unitList[0]?.id || "550e8400-e29b-41d4-a716-446655440020",
+        pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
         bidang_id: bidangId || undefined,
         sub_bidang_id: subBidangId || undefined,
         type_program_id: typeProgramId || undefined,
@@ -283,6 +406,22 @@ export default function ProgramsPage() {
       };
 
       await db.programs.update(selectedProgram.id, updates);
+
+      const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
+      for (const pp of existingPPs) {
+        await db.program_responsibility_pp.delete(pp.id);
+        await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
+      }
+
+      for (const bId of ppBidangIds) {
+        await db.program_responsibility_pp.add({
+          id: crypto.randomUUID(),
+          program_id: selectedProgram.id,
+          bidang_id: bId,
+          period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
+          sync_status: 'PENDING'
+        });
+      }
       
       setSelectedProgram(prev => prev ? { ...prev, ...updates } : null);
       setShowAddModal(false);
@@ -294,12 +433,19 @@ export default function ProgramsPage() {
   };
 
   const handleDeleteProgram = async () => {
+    if (!canEditPrograms) return;
     if (!selectedProgram) return;
 
     try {
       const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
       for (const line of programBudgetLines) {
         await db.anggaran_program.delete(line.id);
+      }
+
+      const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
+      for (const pp of existingPPs) {
+        await db.program_responsibility_pp.delete(pp.id);
+        await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
       }
 
       await db.programs.delete(selectedProgram.id);
@@ -311,52 +457,99 @@ export default function ProgramsPage() {
     }
   };
 
-  const handleAddBudgetItem = async (e: React.FormEvent) => {
+  const recountProgramBudget = async (programId: string) => {
+    try {
+      const lines = await db.anggaran_program.where('program_id').equals(programId).toArray();
+      const revenueTotal = lines.filter(l => l.jenis_anggaran === 'PENERIMAAN').reduce((acc, curr) => acc + curr.sub_total, 0);
+      const expenseTotal = lines.filter(l => l.jenis_anggaran === 'PENGELUARAN').reduce((acc, curr) => acc + curr.sub_total, 0);
+      await db.programs.update(programId, {
+        anggaran_penerimaan: revenueTotal,
+        anggaran_pengeluaran: expenseTotal,
+        sync_status: "PENDING" as const
+      });
+      setSelectedProgram(prev => prev && prev.id === programId ? {
+        ...prev,
+        anggaran_penerimaan: revenueTotal,
+        anggaran_pengeluaran: expenseTotal
+      } : prev);
+    } catch (err) {
+      console.error("Failed to recount program budget:", err);
+    }
+  };
+
+  const openAddBudgetModal = () => {
+    setEditingBudgetItem(null);
+    setBudgetItemName("");
+    setJenisAnggaran("PENGELUARAN");
+    setVolume("1");
+    setSatuan("Kegiatan");
+    setHargaSatuan("0");
+    setFrekuensi("1");
+    setSumberDana("");
+    setCatatan("");
+    setShowAddBudgetModal(true);
+  };
+
+  const openEditBudgetModal = (item: AnggaranProgram) => {
+    setEditingBudgetItem(item);
+    setBudgetItemName(item.nama_anggaran);
+    setJenisAnggaran(item.jenis_anggaran);
+    setVolume(String(item.volume));
+    setSatuan(item.satuan || "");
+    setHargaSatuan(formatNumberWithCommas(item.harga_satuan));
+    setFrekuensi(String(item.frekuensi_pelaksanaan));
+    setSumberDana(item.sumber_dana || "");
+    setCatatan(item.catatan || "");
+    setShowAddBudgetModal(true);
+  };
+
+  const handleSaveBudgetItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditPrograms) return;
     if (!selectedProgram || !budgetItemName.trim()) return;
 
     setSubmitting(true);
     try {
       const vol = parseFloat(volume) || 0;
-      const price = parseFloat(hargaSatuan) || 0;
+      const price = parseFloat(hargaSatuan.replace(/[^0-9]/g, '')) || 0;
       const freq = parseInt(frekuensi, 10) || 1;
       const calculatedSubtotal = vol * price * freq;
 
-      const newBudgetItem: AnggaranProgram = {
-        id: crypto.randomUUID(),
-        program_id: selectedProgram.id,
-        jenis_anggaran: jenisAnggaran,
-        nama_anggaran: budgetItemName.trim(),
-        volume: vol,
-        satuan: satuan.trim(),
-        harga_satuan: price,
-        sumber_harga: 'MANUAL',
-        frekuensi_pelaksanaan: freq,
-        sumber_dana: jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : undefined,
-        catatan: catatan.trim() || undefined,
-        sub_total: calculatedSubtotal,
-        sync_status: "PENDING" as const,
-      };
+      if (editingBudgetItem) {
+        const updates: Partial<AnggaranProgram> = {
+          jenis_anggaran: jenisAnggaran,
+          nama_anggaran: budgetItemName.trim(),
+          volume: vol,
+          satuan: satuan.trim(),
+          harga_satuan: price,
+          frekuensi_pelaksanaan: freq,
+          sumber_dana: jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : undefined,
+          catatan: catatan.trim() || undefined,
+          sub_total: calculatedSubtotal,
+          sync_status: "PENDING" as const,
+        };
+        await db.anggaran_program.update(editingBudgetItem.id, updates);
+        await recountProgramBudget(selectedProgram.id);
+      } else {
+        const newBudgetItem: AnggaranProgram = {
+          id: crypto.randomUUID(),
+          program_id: selectedProgram.id,
+          jenis_anggaran: jenisAnggaran,
+          nama_anggaran: budgetItemName.trim(),
+          volume: vol,
+          satuan: satuan.trim(),
+          harga_satuan: price,
+          sumber_harga: 'MANUAL',
+          frekuensi_pelaksanaan: freq,
+          sumber_dana: jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : undefined,
+          catatan: catatan.trim() || undefined,
+          sub_total: calculatedSubtotal,
+          sync_status: "PENDING" as const,
+        };
+        await db.anggaran_program.add(newBudgetItem);
+        await recountProgramBudget(selectedProgram.id);
+      }
 
-      await db.anggaran_program.add(newBudgetItem);
-
-      // Recalculate budget sums and update programs table
-      const updatedExpenseTotal = totalExpense + (jenisAnggaran === 'PENGELUARAN' ? calculatedSubtotal : 0);
-      const updatedRevenueTotal = totalRevenue + (jenisAnggaran === 'PENERIMAAN' ? calculatedSubtotal : 0);
-      await db.programs.update(selectedProgram.id, {
-        anggaran_penerimaan: updatedRevenueTotal,
-        anggaran_pengeluaran: updatedExpenseTotal,
-        sync_status: "PENDING" as const
-      });
-
-      // Update local state to reflect program budget update
-      setSelectedProgram(prev => prev ? { 
-        ...prev, 
-        anggaran_penerimaan: updatedRevenueTotal,
-        anggaran_pengeluaran: updatedExpenseTotal
-      } : null);
-
-      // Reset Form
       setBudgetItemName("");
       setVolume("1");
       setSatuan("Kegiatan");
@@ -364,40 +557,21 @@ export default function ProgramsPage() {
       setFrekuensi("1");
       setSumberDana("");
       setCatatan("");
+      setEditingBudgetItem(null);
       setShowAddBudgetModal(false);
     } catch (err) {
-      console.error("Failed to add budget item:", err);
+      console.error("Failed to save budget item:", err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteBudgetItem = async (id: string, itemTotal: number, type: 'PENERIMAAN' | 'PENGELUARAN') => {
+  const handleDeleteBudgetItem = async (id: string) => {
+    if (!canEditPrograms) return;
     if (!selectedProgram) return;
     try {
       await db.anggaran_program.delete(id);
-      
-      if (type === 'PENGELUARAN') {
-        const updatedExpenseTotal = Math.max(0, totalExpense - itemTotal);
-        await db.programs.update(selectedProgram.id, {
-          anggaran_pengeluaran: updatedExpenseTotal,
-          sync_status: "PENDING" as const
-        });
-        setSelectedProgram(prev => prev ? { 
-          ...prev, 
-          anggaran_pengeluaran: updatedExpenseTotal 
-        } : null);
-      } else {
-        const updatedRevenueTotal = Math.max(0, totalRevenue - itemTotal);
-        await db.programs.update(selectedProgram.id, {
-          anggaran_penerimaan: updatedRevenueTotal,
-          sync_status: "PENDING" as const
-        });
-        setSelectedProgram(prev => prev ? { 
-          ...prev, 
-          anggaran_penerimaan: updatedRevenueTotal 
-        } : null);
-      }
+      await recountProgramBudget(selectedProgram.id);
     } catch (err) {
       console.error("Failed to delete budget item:", err);
     }
@@ -416,12 +590,14 @@ export default function ProgramsPage() {
           <button className="bg-surface border border-border text-slate-700 p-3 rounded-full shadow-sm active:scale-95 transition-transform">
             <Filter size={20} />
           </button>
-          <button 
-            onClick={openAddModal}
-            className="bg-primary-600 text-white p-3 rounded-full shadow-lg shadow-primary-500/30 active:scale-95 transition-transform"
-          >
-            <Plus size={20} />
-          </button>
+          {canEditPrograms && (
+            <button 
+              onClick={openAddModal}
+              className="bg-primary-600 text-white p-3 rounded-full shadow-lg shadow-primary-500/30 active:scale-95 transition-transform"
+            >
+              <Plus size={20} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -532,9 +708,12 @@ export default function ProgramsPage() {
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
                       >
                         <option value="">-- Choose Bidang --</option>
-                        {bidangList.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
+                        {bidangList
+                          .filter(b => isGlobalAdmin || myBidangIds.length === 0 || myBidangIds.includes(b.id))
+                          .map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))
+                        }
                       </select>
                     </div>
 
@@ -556,18 +735,56 @@ export default function ProgramsPage() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        PJP Unit (Penanggung Jawab)
+                        PJP (Penanggung Jawab) *
                       </label>
                       <select 
-                        value={unitId}
-                        onChange={(e) => setUnitId(e.target.value)}
+                        required
+                        value={pjpBidangId}
+                        onChange={(e) => {
+                          setPjpBidangId(e.target.value);
+                          setPpBidangIds(prev => prev.filter(id => id !== e.target.value));
+                        }}
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
                       >
-                        <option value="">-- Choose Unit --</option>
-                        {unitList.map(u => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
+                        <option value="" disabled>-- Choose Bidang --</option>
+                        {bidangList.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                        PP
+                      </label>
+                      <div className="space-y-2 max-h-36 overflow-y-auto p-3 border border-border rounded-2xl bg-background">
+                        {bidangList
+                          .filter(b => b.id !== pjpBidangId)
+                          .map(b => {
+                            const isChecked = ppBidangIds.includes(b.id);
+                            return (
+                              <label key={b.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setPpBidangIds(prev => [...prev, b.id]);
+                                    } else {
+                                      setPpBidangIds(prev => prev.filter(id => id !== b.id));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <span>{b.name}</span>
+                              </label>
+                            );
+                          })
+                        }
+                        {bidangList.filter(b => b.id !== pjpBidangId).length === 0 && (
+                          <span className="text-xs text-slate-400">Tidak ada bidang penopang lain yang tersedia.</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -577,9 +794,9 @@ export default function ProgramsPage() {
                         </label>
                         <input 
                           type="text" 
+                          readOnly
                           value={tahunAnggaran}
-                          onChange={(e) => setTahunAnggaran(e.target.value)}
-                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                          className="w-full px-4 py-2 border border-border rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed focus:outline-none text-sm font-medium"
                           placeholder="2026"
                         />
                       </div>
@@ -718,8 +935,8 @@ export default function ProgramsPage() {
 
       {/* Program Details Sheet / Modal */}
       {selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-40 animate-fade-in">
-          <div className="bg-surface border-l border-border w-full max-w-lg h-full flex flex-col shadow-2xl relative animate-slide-left overflow-y-auto pb-24">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[55] animate-fade-in">
+          <div className="bg-surface border-l border-border w-full max-w-lg h-full flex flex-col shadow-2xl relative animate-slide-left overflow-hidden">
             <header className="p-6 border-b border-border flex justify-between items-start">
               <div>
                 <span className="text-xs uppercase font-bold text-primary-600 tracking-wide flex items-center gap-1.5 mb-1.5">
@@ -728,20 +945,24 @@ export default function ProgramsPage() {
                 <h2 className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{selectedProgram.name}</h2>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button 
-                  onClick={() => openEditModal(selectedProgram)}
-                  title="Edit Program"
-                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-primary-600 transition-colors"
-                >
-                  <Edit3 size={18} />
-                </button>
-                <button 
-                  onClick={() => setShowDeleteConfirm(true)}
-                  title="Delete Program"
-                  className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 hover:text-red-600 transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
+                {canEditPrograms && (
+                  <>
+                    <button 
+                      onClick={() => openEditModal(selectedProgram)}
+                      title="Edit Program"
+                      className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-primary-600 transition-colors"
+                    >
+                      <Edit3 size={18} />
+                    </button>
+                    <button 
+                      onClick={() => setShowDeleteConfirm(true)}
+                      title="Delete Program"
+                      className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </>
+                )}
                 <button 
                   onClick={() => setSelectedProgram(null)}
                   className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors ml-1"
@@ -757,10 +978,23 @@ export default function ProgramsPage() {
                 {/* 2-Column Grid for Key Metadata */}
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-400 block mb-1">PJP Unit</span>
+                    <span className="text-slate-400 block mb-1">PJP</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
                       <Layers size={14} className="text-primary-500 shrink-0" />
-                      <span className="truncate">{unitList.find(u => u.id === selectedProgram.pjp_unit_id)?.name || 'N/A'}</span>
+                      <span className="truncate">{bidangList.find(b => b.id === selectedProgram.pjp_bidang_id)?.name || 'N/A'}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1">PP</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans flex-wrap">
+                      <Layers size={14} className="text-primary-500 shrink-0" />
+                      <span className="truncate">
+                        {programPPs
+                          .filter(pp => pp.program_id === selectedProgram.id)
+                          .map(pp => bidangList.find(b => b.id === pp.bidang_id)?.name)
+                          .filter(Boolean)
+                          .join(', ') || 'N/A'}
+                      </span>
                     </span>
                   </div>
                   <div>
@@ -941,16 +1175,31 @@ export default function ProgramsPage() {
                             Fund Source: {item.sumber_dana || 'Internal'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="font-bold text-sm text-emerald-600">
-                            Rp {item.sub_total.toLocaleString('id-ID')}
+                        <div className="flex items-center gap-2">
+                          <div className="text-right mr-2">
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Sub Total</span>
+                            <span className="font-bold text-sm text-emerald-600 block">
+                              Rp {((item.sub_total !== undefined && item.sub_total !== null) ? item.sub_total : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
+                            </span>
                           </div>
-                          <button 
-                            onClick={() => handleDeleteBudgetItem(item.id, item.sub_total, 'PENERIMAAN')}
-                            className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {canEditPrograms && (
+                            <>
+                              <button 
+                                onClick={() => openEditBudgetModal(item)}
+                                title="Edit Budget Line"
+                                className="text-slate-300 hover:text-primary-600 transition-colors p-1"
+                              >
+                                <Edit3 size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBudgetItem(item.id)}
+                                title="Delete Budget Line"
+                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))
@@ -983,16 +1232,31 @@ export default function ProgramsPage() {
                             <p className="text-[9px] text-slate-400 italic mt-1">{item.catatan}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                            Rp {item.sub_total.toLocaleString('id-ID')}
+                        <div className="flex items-center gap-2">
+                          <div className="text-right mr-2">
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Sub Total</span>
+                            <span className="font-bold text-sm text-slate-800 dark:text-slate-200 block">
+                              Rp {((item.sub_total !== undefined && item.sub_total !== null) ? item.sub_total : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
+                            </span>
                           </div>
-                          <button 
-                            onClick={() => handleDeleteBudgetItem(item.id, item.sub_total, 'PENGELUARAN')}
-                            className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {canEditPrograms && (
+                            <>
+                              <button 
+                                onClick={() => openEditBudgetModal(item)}
+                                title="Edit Budget Line"
+                                className="text-slate-300 hover:text-primary-600 transition-colors p-1"
+                              >
+                                <Edit3 size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBudgetItem(item.id)}
+                                title="Delete Budget Line"
+                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))
@@ -1002,153 +1266,175 @@ export default function ProgramsPage() {
             </div>
 
             {/* Quick Actions at footer */}
-            <div className="absolute bottom-0 inset-x-0 p-4 border-t border-border bg-surface flex gap-2">
-              <button 
-                onClick={() => setShowAddBudgetModal(true)}
-                className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/15 active:scale-[0.98] transition-all"
-              >
-                <Plus size={18} /> Add Budget Item
-              </button>
-            </div>
+            {canEditPrograms && (
+              <div className="p-4 border-t border-border bg-surface flex gap-2 shrink-0">
+                <button 
+                  onClick={openAddBudgetModal}
+                  className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/15 active:scale-[0.98] transition-all"
+                >
+                  <Plus size={18} /> Add Budget Item
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Add Budget Item Modal */}
       {showAddBudgetModal && selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
-            <button 
-              onClick={() => setShowAddBudgetModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              <X size={20} />
-            </button>
-            <h2 className="text-xl font-bold mb-4">Add Budget Line</h2>
-            
-            <form onSubmit={handleAddBudgetItem} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Budget Item Name
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  value={budgetItemName}
-                  onChange={(e) => setBudgetItemName(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  placeholder="e.g. Uang Rapat, Sewa Mobil"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Type
-                  </label>
-                  <select 
-                    value={jenisAnggaran}
-                    onChange={(e) => setJenisAnggaran(e.target.value as any)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                  >
-                    <option value="PENGELUARAN">Expense</option>
-                    <option value="PENERIMAAN">Revenue</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Unit / Satuan
-                  </label>
-                  <input 
-                    type="text" 
-                    required
-                    value={satuan}
-                    onChange={(e) => setSatuan(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="e.g. Orang, Unit"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Volume
-                  </label>
-                  <input 
-                    type="number" 
-                    required
-                    value={volume}
-                    onChange={(e) => setVolume(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="1"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Frequency
-                  </label>
-                  <input 
-                    type="number" 
-                    required
-                    value={frekuensi}
-                    onChange={(e) => setFrekuensi(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="1"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Price (Rp)
-                  </label>
-                  <input 
-                    type="number" 
-                    required
-                    value={hargaSatuan}
-                    onChange={(e) => setHargaSatuan(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              {jenisAnggaran === 'PENERIMAAN' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Source of Funds
-                  </label>
-                  <input 
-                    type="text" 
-                    value={sumberDana}
-                    onChange={(e) => setSumberDana(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="e.g. Dana MS, Persembahan Khusus"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Catatan / Notes
-                </label>
-                <textarea 
-                  value={catatan}
-                  onChange={(e) => setCatatan(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none"
-                  placeholder="Additional description..."
-                />
-              </div>
-
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in">
+          <div className="bg-surface border border-border rounded-3xl w-full max-w-md max-h-[75vh] flex flex-col shadow-2xl relative overflow-hidden">
+            <header className="p-6 border-b border-border flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold">
+                {editingBudgetItem ? "Edit Budget Line" : "Add Budget Line"}
+              </h2>
               <button 
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 mt-2 shadow-lg shadow-primary-500/10 active:scale-95"
+                onClick={() => {
+                  setShowAddBudgetModal(false);
+                  setEditingBudgetItem(null);
+                }}
+                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
               >
-                {submitting ? "Adding..." : "Add Budget Line"}
+                <X size={20} />
               </button>
+            </header>
+            
+            <form onSubmit={handleSaveBudgetItem} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Budget Item Name
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    value={budgetItemName}
+                    onChange={(e) => setBudgetItemName(e.target.value)}
+                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                    placeholder="e.g. Uang Rapat, Sewa Mobil"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Type
+                    </label>
+                    <select 
+                      value={jenisAnggaran}
+                      onChange={(e) => setJenisAnggaran(e.target.value as any)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                    >
+                      <option value="PENGELUARAN">Expense</option>
+                      <option value="PENERIMAAN">Revenue</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Unit / Satuan
+                    </label>
+                    <input 
+                      type="text" 
+                      value={satuan}
+                      onChange={(e) => setSatuan(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                      placeholder="e.g. Orang, Unit"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Volume
+                    </label>
+                    <input 
+                      type="number" 
+                      required
+                      value={volume}
+                      onChange={(e) => setVolume(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                      placeholder="1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Frequency
+                    </label>
+                    <input 
+                      type="number" 
+                      required
+                      value={frekuensi}
+                      onChange={(e) => setFrekuensi(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                      placeholder="1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Price (Rp)
+                    </label>
+                    <input 
+                      type="text" 
+                      inputMode="numeric"
+                      pattern="[0-9,]*"
+                      required
+                      value={hargaSatuan}
+                      onChange={(e) => setHargaSatuan(formatNumberWithCommas(e.target.value))}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                {jenisAnggaran === 'PENERIMAAN' && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Source of Funds
+                    </label>
+                    <input 
+                      type="text" 
+                      value={sumberDana}
+                      onChange={(e) => setSumberDana(e.target.value)}
+                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                      placeholder="e.g. Dana MS, Persembahan Khusus"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Catatan / Notes
+                  </label>
+                  <textarea 
+                    value={catatan}
+                    onChange={(e) => setCatatan(e.target.value)}
+                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none"
+                    placeholder="Additional description..."
+                  />
+                </div>
+
+                {/* Live Preview of Sub Total */}
+                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border flex justify-between items-center mt-2 shrink-0">
+                  <span className="text-xs font-semibold text-slate-500 uppercase">Sub Total Preview</span>
+                  <span className="font-bold text-lg text-primary-600">
+                    Rp {((parseFloat(volume) || 0) * (parseFloat(hargaSatuan.replace(/[^0-9]/g, '')) || 0) * (parseInt(frekuensi, 10) || 1)).toLocaleString('id-ID')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border bg-surface shrink-0">
+                <button 
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-primary-500/10 active:scale-95"
+                >
+                  {submitting ? "Saving..." : (editingBudgetItem ? "Save Changes" : "Add Budget Line")}
+                </button>
+              </div>
             </form>
           </div>
         </div>

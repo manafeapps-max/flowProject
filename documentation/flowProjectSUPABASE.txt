@@ -55,4 +55,16 @@ pass: Le0nard123#
 port: 5432
 
 
+GIT HUB
+
+email:
+manafeapps@gmail.com
+
+username
+manafeapps-max
+
+Repository name
+flowProject
+
+
 
