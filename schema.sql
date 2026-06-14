@@ -110,17 +110,6 @@ CREATE TABLE bidang (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Sub-Bidang
-CREATE TABLE sub_bidang (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
-    bidang_id UUID NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    code VARCHAR(100) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Programs
 CREATE TABLE programs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -131,7 +120,7 @@ CREATE TABLE programs (
     pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
     type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
     bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
-    sub_bidang_id UUID REFERENCES sub_bidang(id) ON DELETE SET NULL,
+    sub_bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
     anggaran_penerimaan NUMERIC(15, 2) DEFAULT 0.00,
     anggaran_pengeluaran NUMERIC(15, 2) DEFAULT 0.00,
     program_code VARCHAR(100),
