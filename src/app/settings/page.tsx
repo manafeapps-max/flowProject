@@ -191,6 +191,7 @@ export default function SettingsPage() {
 
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [unitName, setUnitName] = useState("");
+  const [unitDesc, setUnitDesc] = useState("");
   const [unitBidangId, setUnitBidangId] = useState<string | null>(null);
   const [unitParentId, setUnitParentId] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<OrganizationUnit | null>(null);
@@ -476,7 +477,11 @@ export default function SettingsPage() {
     setSubmitting(true);
     try {
       if (editingUnit) {
-        await db.organization_units.update(editingUnit.id, { name: unitName.trim(), sync_status: 'PENDING' });
+        await db.organization_units.update(editingUnit.id, { 
+          name: unitName.trim(), 
+          description: unitDesc.trim() || undefined,
+          sync_status: 'PENDING' 
+        });
       } else {
         await db.organization_units.add({
           id: crypto.randomUUID(),
@@ -484,6 +489,7 @@ export default function SettingsPage() {
           name: unitName.trim(),
           bidang_id: unitBidangId || undefined,
           parent_id: unitParentId,
+          description: unitDesc.trim() || undefined,
           sync_status: 'PENDING'
         });
       }
@@ -734,8 +740,8 @@ export default function SettingsPage() {
                                 <div className="flex items-center gap-1">
                                   {canManageSettings && (
                                     <>
-                                      <button onClick={() => { setUnitBidangId(b.id); setUnitParentId(unit.id); setUnitName(""); setEditingUnit(null); setShowUnitModal(true); }} className="text-primary-600 hover:text-primary-700 p-1" title="Tambah Sub-Unit"><Plus size={16}/></button>
-                                      <button onClick={() => { setEditingUnit(unit); setUnitName(unit.name); setShowUnitModal(true); }} className="text-slate-400 hover:text-primary-600 p-1"><Edit3 size={16}/></button>
+                                      <button onClick={() => { setUnitBidangId(b.id); setUnitParentId(unit.id); setUnitName(""); setUnitDesc(""); setEditingUnit(null); setShowUnitModal(true); }} className="text-primary-600 hover:text-primary-700 p-1" title="Tambah Sub-Unit"><Plus size={16}/></button>
+                                      <button onClick={() => { setEditingUnit(unit); setUnitName(unit.name); setUnitDesc(unit.description || ""); setShowUnitModal(true); }} className="text-slate-400 hover:text-primary-600 p-1"><Edit3 size={16}/></button>
                                       <button onClick={() => handleDeleteUnit(unit.id)} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
                                     </>
                                   )}
@@ -752,7 +758,7 @@ export default function SettingsPage() {
                                   <div className="flex items-center gap-1">
                                     {canManageSettings && (
                                       <>
-                                        <button onClick={() => { setEditingUnit(child); setUnitName(child.name); setShowUnitModal(true); }} className="text-slate-400 hover:text-primary-600 p-1"><Edit3 size={14}/></button>
+                                        <button onClick={() => { setEditingUnit(child); setUnitName(child.name); setUnitDesc(child.description || ""); setShowUnitModal(true); }} className="text-slate-400 hover:text-primary-600 p-1"><Edit3 size={14}/></button>
                                         <button onClick={() => handleDeleteUnit(child.id)} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={14}/></button>
                                       </>
                                     )}
@@ -764,7 +770,7 @@ export default function SettingsPage() {
                         })}
                         {canManageSettings && (
                           <div className="p-4 pl-12">
-                            <button onClick={() => { setUnitBidangId(b.id); setUnitParentId(null); setUnitName(""); setEditingUnit(null); setShowUnitModal(true); }} className="flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-xs font-semibold">
+                            <button onClick={() => { setUnitBidangId(b.id); setUnitParentId(null); setUnitName(""); setUnitDesc(""); setEditingUnit(null); setShowUnitModal(true); }} className="flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-xs font-semibold">
                               <Plus size={14} /> Tambah Unit
                             </button>
                           </div>
@@ -1373,6 +1379,7 @@ export default function SettingsPage() {
             <h2 className="text-xl font-bold mb-6">{editingUnit ? "Edit Unit" : "Tambah Unit"}</h2>
             <form onSubmit={handleSaveUnit} className="space-y-4">
               <input required value={unitName} onChange={e=>setUnitName(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Nama Unit"/>
+              <textarea value={unitDesc} onChange={e=>setUnitDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium h-24 resize-none" placeholder="Deskripsi Unit (Opsional)"/>
               <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10">Simpan Data</button>
             </form>
           </div>

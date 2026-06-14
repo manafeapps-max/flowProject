@@ -30,6 +30,7 @@ CREATE TABLE organization_units (
     bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     parent_id UUID REFERENCES organization_units(id) ON DELETE CASCADE,
+    description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

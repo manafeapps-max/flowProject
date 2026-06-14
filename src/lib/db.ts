@@ -15,6 +15,7 @@ export interface OrganizationUnit {
   bidang_id?: string; // Links unit directly to a Bidang
   name: string;
   parent_id: string | null;
+  description?: string;
   sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
 }
 
