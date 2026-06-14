@@ -1359,6 +1359,7 @@ export default function SettingsPage() {
             <form onSubmit={handleSaveBidang} className="space-y-4">
               <input required value={bidangCode} onChange={e=>setBidangCode(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Kode (e.g. BD-1)"/>
               <input required value={bidangName} onChange={e=>setBidangName(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Nama Bidang"/>
+              <textarea value={bidangDesc} onChange={e=>setBidangDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium h-24 resize-none" placeholder="Deskripsi Bidang (e.g. Bidang II Pelayanan dan Kesaksian)"/>
               <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10">Simpan Data</button>
             </form>
           </div>
