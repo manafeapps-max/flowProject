@@ -289,7 +289,7 @@ export async function syncPush(): Promise<boolean> {
     // 4. Push pending budgets (anggaran_program)
     const pendingBudgets = await db.anggaran_program.where('sync_status').equals('PENDING').toArray();
     for (const b of pendingBudgets) {
-      const { id, sync_status, ...rest } = b;
+      const { id, sync_status, sub_total, ...rest } = b;
       const { error } = await supabase.from('anggaran_program').upsert({ id, ...rest });
       if (error) {
         hasErrors = true;
