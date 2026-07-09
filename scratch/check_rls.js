@@ -17,15 +17,14 @@ async function run() {
     await client.connect();
     console.log('Connected to PostgreSQL successfully.');
 
-    // 1. Fetch users from auth.users
-    const authUsers = await client.query('SELECT id, email, created_at FROM auth.users;');
-    console.log('\n--- auth.users in database ---');
-    console.table(authUsers.rows);
-
-    // 2. Fetch profiles from public.user_profiles view
-    const profiles = await client.query('SELECT id, email FROM public.user_profiles;');
-    console.log('\n--- public.user_profiles view rows ---');
-    console.table(profiles.rows);
+    // Get policies for periods and user_role
+    const policies = await client.query(`
+      SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+      FROM pg_policies
+      WHERE tablename IN ('periods', 'user_role');
+    `);
+    console.log('\n=== RLS Policies ===');
+    console.log(JSON.stringify(policies.rows, null, 2));
 
   } catch (err) {
     console.error('Error during execution:', err);

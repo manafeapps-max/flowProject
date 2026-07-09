@@ -3,9 +3,9 @@ const path = require('path');
 const { Client } = require('pg');
 
 const config = {
-  host: '2406:da18:e5c:b700:d7eb:a980:c745:47b1',
+  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
   port: 5432,
-  user: 'postgres',
+  user: 'postgres.ouesnbkrsejuersezzhk',
   password: '8hZ6SectdwpTk6#',
   database: 'postgres',
   ssl: {
@@ -353,7 +353,7 @@ async function run() {
     console.log('  Mapping programs...');
     await client.query(`
       INSERT INTO public.programs (
-          id, period_id, name, status, pjp_unit_id, pic_membership_id, type_program_id, bidang_id, sub_bidang_id,
+          id, period_id, name, status, pjp_bidang_id, pic_membership_id, type_program_id, bidang_id, sub_bidang_id,
           anggaran_penerimaan, anggaran_pengeluaran,
           program_code, tujuan_program, tahun_anggaran, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, catatan_anggaran, waktu,
           created_at, updated_at
@@ -363,7 +363,7 @@ async function run() {
           p.periode_id, 
           p.title, 
           COALESCE(p.status::program_status_enum, 'DRAFT'::program_status_enum), 
-          COALESCE(p.sub_bidang_id, p.bidang_id), 
+          COALESCE(p.bidang_id, '550e8400-e29b-41d4-a716-446655440010'), 
           'de641feb-9990-4057-ba23-6c66253e2fa9',
           p.type_program_id,
           p.bidang_id,

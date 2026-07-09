@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, Program, AnggaranProgram, Period } from "@/lib/db";
+import { db, Program, AnggaranProgram, Period, ProgramIndicator } from "@/lib/db";
 import { useAppStore } from "@/store/useAppStore";
 import { 
   Briefcase, Plus, Filter, CircleArrowRight, CheckCircle2, Clock, X, 
@@ -79,6 +79,8 @@ export default function ProgramsPage() {
   const subBidangs = useLiveQuery(() => db.organization_units.toArray().then(arr => arr.filter(u => u.parent_id !== null || !!u.bidang_id)));
   const periods = useLiveQuery(() => db.periods.toArray());
   const programPPs = useLiveQuery(() => db.program_responsibility_pp.toArray()) || [];
+  const members = useLiveQuery(() => db.members.toArray()) || [];
+  const unitMembers = useLiveQuery(() => db.unit_members.toArray()) || [];
 
   const getPeriodDurationYears = (p: Period) => {
     const start = new Date(p.start_date);
@@ -194,6 +196,23 @@ export default function ProgramsPage() {
   const [ikKualitatif, setIkKualitatif] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [picDetails, setPicDetails] = useState<{ name: string; bidang: string } | null>(null);
+  const [picMembershipId, setPicMembershipId] = useState("");
+
+  // Indicators Form State
+  const [indicatorsList, setIndicatorsList] = useState<{
+    id?: string;
+    type: 'KUALITATIF' | 'KUANTITATIF';
+    indicator_text: string;
+    target?: string;
+    realization?: string;
+    unit?: string;
+  }[]>([]);
+  const [newIndText, setNewIndText] = useState("");
+  const [newIndType, setNewIndType] = useState<'KUALITATIF' | 'KUANTITATIF'>('KUALITATIF');
+  const [newIndTarget, setNewIndTarget] = useState("");
+  const [newIndRealization, setNewIndRealization] = useState("");
+  const [newIndUnit, setNewIndUnit] = useState("");
 
   // Budget Item Form
   const [editingBudgetItem, setEditingBudgetItem] = useState<AnggaranProgram | null>(null);
@@ -223,10 +242,85 @@ export default function ProgramsPage() {
     [selectedProgram]
   ) || [];
 
+  // Query success indicators dynamically for the selected program
+  const programIndicators = useLiveQuery(
+    () => selectedProgram ? db.program_indicators.where('program_id').equals(selectedProgram.id).toArray() : Promise.resolve<ProgramIndicator[]>([]),
+    [selectedProgram]
+  ) || [];
+
   const revenueItems = budgetLines.filter(item => item.jenis_anggaran === 'PENERIMAAN');
   const expenseItems = budgetLines.filter(item => item.jenis_anggaran === 'PENGELUARAN');
 
   const totalRevenue = revenueItems.reduce((acc, curr) => acc + curr.sub_total, 0);
+
+  useEffect(() => {
+    const resolvePic = async () => {
+      if (!selectedProgram || !selectedProgram.pic_membership_id) {
+        setPicDetails(null);
+        return;
+      }
+      
+      const picId = selectedProgram.pic_membership_id;
+      let member = null;
+      
+      // 1. Try directly looking up by member ID in db.members
+      member = await db.members.get(picId);
+      
+      // 2. If not found, check if it's a user/membership ID by querying user_profiles for email
+      if (!member) {
+        const profile = await db.user_profiles.get(picId);
+        if (profile?.email) {
+          member = await db.members.where('email').equalsIgnoreCase(profile.email).first();
+        }
+      }
+      
+      // 3. Fallback: Check if the user is stolaputih or benmanafe to match members
+      if (!member) {
+        if (picId === 'de641feb-9990-4057-ba23-6c66253e2fa9') {
+          member = await db.members.where('email').equalsIgnoreCase('stolaputih@gmail.com').first();
+        }
+      }
+
+      if (!member) {
+        setPicDetails({ name: 'Unknown Member', bidang: 'N/A' });
+        return;
+      }
+      
+      // Resolve Bidang
+      let bidangName = 'N/A';
+      const assignments = await db.unit_members.where('member_id').equals(member.id).toArray();
+      if (assignments.length > 0) {
+        const primary = assignments[0];
+        if (primary.unit_type === 'BIDANG') {
+          const bd = await db.bidang.get(primary.unit_id);
+          if (bd) bidangName = bd.name;
+        } else {
+          // It's a Sub-Bidang/Unit
+          const unit = await db.organization_units.get(primary.unit_id);
+          if (unit) {
+            const parentBidangId = unit.bidang_id || unit.parent_id;
+            if (parentBidangId) {
+              const bd = await db.bidang.get(parentBidangId);
+              if (bd) {
+                bidangName = `${bd.name} (${unit.name})`;
+              } else {
+                bidangName = unit.name;
+              }
+            } else {
+              bidangName = unit.name;
+            }
+          }
+        }
+      }
+      
+      setPicDetails({
+        name: member.name,
+        bidang: bidangName
+      });
+    };
+    
+    resolvePic();
+  }, [selectedProgram, members, unitMembers, bidangs]);
   const totalExpense = expenseItems.reduce((acc, curr) => acc + curr.sub_total, 0);
 
   const getCatatanAnggaran = () => {
@@ -273,6 +367,18 @@ export default function ProgramsPage() {
     setIkKualitatif("");
     setDeskripsi("");
     setWaktuQuarters({ Q1: false, Q2: false, Q3: false, Q4: false });
+
+    const emailLower = currentUser?.email?.toLowerCase();
+    const defaultMember = emailLower
+      ? members.find(m => m.email?.toLowerCase() === emailLower)
+      : null;
+    setPicMembershipId(defaultMember?.id || members[0]?.id || "de641feb-9990-4057-ba23-6c66253e2fa9");
+    setIndicatorsList([]);
+    setNewIndText("");
+    setNewIndType("KUALITATIF");
+    setNewIndTarget("");
+    setNewIndRealization("");
+    setNewIndUnit("");
     
     setIsEditing(false);
     setShowAddModal(true);
@@ -295,6 +401,22 @@ export default function ProgramsPage() {
     setIkKualitatif(prog.ik_kualitatif || "");
     setDeskripsi(prog.deskripsi || "");
     
+    db.program_indicators.where('program_id').equals(prog.id).toArray().then(inds => {
+      setIndicatorsList(inds.map(ind => ({
+        id: ind.id,
+        type: ind.type,
+        indicator_text: ind.indicator_text,
+        target: ind.target !== undefined ? String(ind.target) : "",
+        realization: ind.realization !== undefined ? String(ind.realization) : "",
+        unit: ind.unit || ""
+      })));
+    });
+    setNewIndText("");
+    setNewIndType("KUALITATIF");
+    setNewIndTarget("");
+    setNewIndRealization("");
+    setNewIndUnit("");
+    
     const quarters = { Q1: false, Q2: false, Q3: false, Q4: false };
     if (prog.waktu) {
       prog.waktu.split(',').forEach(w => {
@@ -306,6 +428,7 @@ export default function ProgramsPage() {
       });
     }
     setWaktuQuarters(quarters);
+    setPicMembershipId(prog.pic_membership_id || "de641feb-9990-4057-ba23-6c66253e2fa9");
     
     setIsEditing(true);
     setShowAddModal(true);
@@ -338,7 +461,7 @@ export default function ProgramsPage() {
         name: name.trim(),
         status: "DRAFT" as const,
         pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
-        pic_membership_id: member?.id || "de641feb-9990-4057-ba23-6c66253e2fa9",
+        pic_membership_id: picMembershipId || "de641feb-9990-4057-ba23-6c66253e2fa9",
         bidang_id: bidangId || undefined,
         sub_bidang_id: subBidangId || undefined,
         type_program_id: typeProgramId || undefined,
@@ -364,6 +487,19 @@ export default function ProgramsPage() {
           program_id: progId,
           bidang_id: bId,
           period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
+          sync_status: 'PENDING'
+        });
+      }
+
+      for (const ind of indicatorsList) {
+        await db.program_indicators.add({
+          id: crypto.randomUUID(),
+          program_id: progId,
+          type: ind.type,
+          indicator_text: ind.indicator_text,
+          target: ind.target ? parseFloat(ind.target) : undefined,
+          realization: ind.realization ? parseFloat(ind.realization) : undefined,
+          unit: ind.unit || undefined,
           sync_status: 'PENDING'
         });
       }
@@ -394,6 +530,7 @@ export default function ProgramsPage() {
       const updates: Partial<Program> = {
         name: name.trim(),
         pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
+        pic_membership_id: picMembershipId,
         bidang_id: bidangId || undefined,
         sub_bidang_id: subBidangId || undefined,
         type_program_id: typeProgramId || undefined,
@@ -409,23 +546,44 @@ export default function ProgramsPage() {
         sync_status: "PENDING" as const,
       };
 
-      await db.programs.update(selectedProgram.id, updates);
+      await db.transaction('rw', [db.programs, db.program_responsibility_pp, db.program_indicators, db.deleted_records], async () => {
+        await db.programs.update(selectedProgram.id, updates);
 
-      const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
-      for (const pp of existingPPs) {
-        await db.program_responsibility_pp.delete(pp.id);
-        await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
-      }
+        const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
+        for (const pp of existingPPs) {
+          await db.program_responsibility_pp.delete(pp.id);
+          await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
+        }
 
-      for (const bId of ppBidangIds) {
-        await db.program_responsibility_pp.add({
-          id: crypto.randomUUID(),
-          program_id: selectedProgram.id,
-          bidang_id: bId,
-          period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
-          sync_status: 'PENDING'
-        });
-      }
+        for (const bId of ppBidangIds) {
+          await db.program_responsibility_pp.add({
+            id: crypto.randomUUID(),
+            program_id: selectedProgram.id,
+            bidang_id: bId,
+            period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
+            sync_status: 'PENDING'
+          });
+        }
+
+        const existingInds = await db.program_indicators.where('program_id').equals(selectedProgram.id).toArray();
+        for (const ind of existingInds) {
+          await db.program_indicators.delete(ind.id);
+          await db.deleted_records.add({ id: ind.id, table_name: 'program_indicators', sync_status: 'PENDING' });
+        }
+
+        for (const ind of indicatorsList) {
+          await db.program_indicators.add({
+            id: ind.id || crypto.randomUUID(),
+            program_id: selectedProgram.id,
+            type: ind.type,
+            indicator_text: ind.indicator_text,
+            target: ind.target ? parseFloat(ind.target) : undefined,
+            realization: ind.realization ? parseFloat(ind.realization) : undefined,
+            unit: ind.unit || undefined,
+            sync_status: 'PENDING'
+          });
+        }
+      });
       
       setSelectedProgram(prev => prev ? { ...prev, ...updates } : null);
       setShowAddModal(false);
@@ -441,7 +599,7 @@ export default function ProgramsPage() {
     if (!selectedProgram) return;
 
     try {
-      await db.transaction('rw', [db.programs, db.anggaran_program, db.program_responsibility_pp, db.deleted_records], async () => {
+      await db.transaction('rw', [db.programs, db.anggaran_program, db.program_responsibility_pp, db.program_indicators, db.deleted_records], async () => {
         const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
         for (const line of programBudgetLines) {
           await db.anggaran_program.delete(line.id);
@@ -452,6 +610,12 @@ export default function ProgramsPage() {
         for (const pp of existingPPs) {
           await db.program_responsibility_pp.delete(pp.id);
           await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
+        }
+
+        const existingInds = await db.program_indicators.where('program_id').equals(selectedProgram.id).toArray();
+        for (const ind of existingInds) {
+          await db.program_indicators.delete(ind.id);
+          await db.deleted_records.add({ id: ind.id, table_name: 'program_indicators', sync_status: 'PENDING' });
         }
 
         await db.programs.delete(selectedProgram.id);
@@ -777,67 +941,75 @@ export default function ProgramsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
-                        PP
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        PIC (Person In Charge) *
                       </label>
-                      <div className="space-y-2 max-h-36 overflow-y-auto p-3 border border-border rounded-2xl bg-background">
-                        {bidangList
-                          .filter(b => b.id !== pjpBidangId)
-                          .map(b => {
-                            const isChecked = ppBidangIds.includes(b.id);
-                            return (
-                              <label key={b.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
-                                <input 
-                                  type="checkbox" 
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setPpBidangIds(prev => [...prev, b.id]);
-                                    } else {
-                                      setPpBidangIds(prev => prev.filter(id => id !== b.id));
-                                    }
-                                  }}
-                                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                                />
-                                <span>{b.name}</span>
-                              </label>
-                            );
-                          })
-                        }
-                        {bidangList.filter(b => b.id !== pjpBidangId).length === 0 && (
-                          <span className="text-xs text-slate-400">Tidak ada bidang penopang lain yang tersedia.</span>
-                        )}
-                      </div>
+                      <select 
+                        required
+                        value={picMembershipId}
+                        onChange={(e) => setPicMembershipId(e.target.value)}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+                      >
+                        <option value="" disabled>-- Choose PIC --</option>
+                        {members.map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                          Tahun Anggaran
-                        </label>
-                        <input 
-                          type="text" 
-                          readOnly
-                          value={tahunAnggaran}
-                          className="w-full px-4 py-2 border border-border rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed focus:outline-none text-sm font-medium"
-                          placeholder="2026"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                          Bulan
-                        </label>
-                        <select 
-                          value={bulan}
-                          onChange={(e) => setBulan(e.target.value)}
-                          className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                        >
-                          <option value="">-- None --</option>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                            <option key={m} value={m}>{getMonthName(m)}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                        PP (Penopang Program)
+                      </label>
+                      <details className="group border border-border rounded-2xl bg-background overflow-hidden">
+                        <summary className="flex justify-between items-center px-4 py-2 cursor-pointer select-none text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <span>Pilih PP ({ppBidangIds.length} terpilih)</span>
+                          <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </summary>
+                        <div className="p-3 border-t border-border space-y-2 max-h-36 overflow-y-auto bg-slate-50/30 dark:bg-slate-900/10">
+                          {bidangList
+                            .filter(b => b.id !== pjpBidangId)
+                            .map(b => {
+                              const isChecked = ppBidangIds.includes(b.id);
+                              return (
+                                <label key={b.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setPpBidangIds(prev => [...prev, b.id]);
+                                      } else {
+                                        setPpBidangIds(prev => prev.filter(id => id !== b.id));
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                  <span>{b.name}</span>
+                                </label>
+                              );
+                            })
+                          }
+                          {bidangList.filter(b => b.id !== pjpBidangId).length === 0 && (
+                            <span className="text-xs text-slate-400">Tidak ada bidang penopang lain yang tersedia.</span>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Tahun Anggaran
+                      </label>
+                      <input 
+                        type="text" 
+                        readOnly
+                        value={tahunAnggaran}
+                        className="w-full px-4 py-2 border border-border rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed focus:outline-none text-sm font-medium"
+                        placeholder="2026"
+                      />
                     </div>
                   </div>
 
@@ -909,15 +1081,114 @@ export default function ProgramsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Indikator Kinerja Kualitatif
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                        Indikator Keberhasilan (IK)
                       </label>
-                      <textarea 
-                        value={ikKualitatif}
-                        onChange={(e) => setIkKualitatif(e.target.value)}
-                        className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none text-sm font-medium"
-                        placeholder="Expected quality results..."
-                      />
+                      
+                      {/* Indicators List */}
+                      {indicatorsList.length > 0 && (
+                        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto p-3 border border-border rounded-2xl bg-slate-50 dark:bg-slate-800/40">
+                          {indicatorsList.map((ind, idx) => (
+                            <div key={idx} className="flex justify-between items-start gap-2 bg-background border border-border/60 p-2.5 rounded-xl shadow-xs">
+                              <div className="text-xs">
+                                <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase mr-1.5 ${
+                                  ind.type === 'KUALITATIF' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                }`}>
+                                  {ind.type}
+                                </span>
+                                <span className="text-slate-700 dark:text-slate-300 font-medium">{ind.indicator_text}</span>
+                                {ind.type === 'KUANTITATIF' && ind.target && (
+                                  <span className="text-slate-400 ml-1">
+                                    (Target: {ind.target} {ind.unit}
+                                    {ind.realization ? `, Realisasi: ${ind.realization}` : ''})
+                                  </span>
+                                )}
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => setIndicatorsList(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add Indicator Form Widget */}
+                      <div className="p-3 border border-border rounded-2xl bg-slate-50 dark:bg-slate-800/20 space-y-3">
+                        <div className="flex gap-2">
+                          <select 
+                            value={newIndType}
+                            onChange={(e) => setNewIndType(e.target.value as any)}
+                            className="px-3 py-1.5 border border-border rounded-xl bg-background text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          >
+                            <option value="KUALITATIF">Kualitatif</option>
+                            <option value="KUANTITATIF">Kuantitatif</option>
+                          </select>
+                          <input 
+                            type="text"
+                            value={newIndText}
+                            onChange={(e) => setNewIndText(e.target.value)}
+                            placeholder="Tulis deskripsi indikator..."
+                            className="flex-1 px-3 py-1.5 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                        </div>
+                        
+                        {newIndType === 'KUANTITATIF' && (
+                          <div className="grid grid-cols-3 gap-2 animate-fade-in">
+                            <div>
+                              <input 
+                                type="number"
+                                value={newIndTarget}
+                                onChange={(e) => setNewIndTarget(e.target.value)}
+                                placeholder="Target (Angka)"
+                                className="w-full px-3 py-1.5 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              />
+                            </div>
+                            <div>
+                              <input 
+                                type="text"
+                                value={newIndUnit}
+                                onChange={(e) => setNewIndUnit(e.target.value)}
+                                placeholder="Satuan (e.g. orang)"
+                                className="w-full px-3 py-1.5 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              />
+                            </div>
+                            <div>
+                              <input 
+                                type="number"
+                                value={newIndRealization}
+                                onChange={(e) => setNewIndRealization(e.target.value)}
+                                placeholder="Realisasi (Angka)"
+                                className="w-full px-3 py-1.5 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (!newIndText.trim()) return;
+                            setIndicatorsList(prev => [...prev, {
+                              type: newIndType,
+                              indicator_text: newIndText.trim(),
+                              target: newIndType === 'KUANTITATIF' ? newIndTarget : undefined,
+                              realization: newIndType === 'KUANTITATIF' ? newIndRealization : undefined,
+                              unit: newIndType === 'KUANTITATIF' ? newIndUnit.trim() : undefined
+                            }]);
+                            setNewIndText("");
+                            setNewIndTarget("");
+                            setNewIndRealization("");
+                            setNewIndUnit("");
+                          }}
+                          className="w-full py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-700/80 active:scale-[0.98] transition-transform"
+                        >
+                          Tambahkan Indikator
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -1048,13 +1319,7 @@ export default function ProgramsPage() {
                       <span className="truncate">{selectedProgram.tahun_anggaran || 'N/A'}</span>
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block mb-1">Bulan</span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                      <Calendar size={14} className="text-primary-500 shrink-0" />
-                      <span>{getMonthName(selectedProgram.bulan)}</span>
-                    </span>
-                  </div>
+
                   <div>
                     <span className="text-slate-400 block mb-1">Frekuensi</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
@@ -1078,10 +1343,19 @@ export default function ProgramsPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block mb-1">PIC ID</span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-mono" title={selectedProgram.pic_membership_id}>
-                      <User size={14} className="text-primary-500 shrink-0" />
-                      <span className="truncate">{selectedProgram.pic_membership_id ? selectedProgram.pic_membership_id.substring(0, 8) + '...' : 'N/A'}</span>
+                    <span className="text-slate-400 block mb-1">PIC</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex flex-col gap-0.5 leading-tight">
+                      <span className="flex items-center gap-1.5">
+                        <User size={14} className="text-primary-500 shrink-0" />
+                        <span className="truncate" title={picDetails ? picDetails.name : selectedProgram.pic_membership_id}>
+                          {picDetails ? picDetails.name : (selectedProgram.pic_membership_id ? selectedProgram.pic_membership_id.substring(0, 8) + '...' : 'N/A')}
+                        </span>
+                      </span>
+                      {picDetails && picDetails.bidang !== 'N/A' && (
+                        <span className="text-[10.5px] text-slate-400 font-medium pl-5 truncate" title={picDetails.bidang}>
+                          {picDetails.bidang}
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1129,14 +1403,46 @@ export default function ProgramsPage() {
                   </p>
                 </div>
 
-                {/* Success Indicator */}
-                <div className="pt-3 border-t border-border border-dashed">
-                  <span className="text-slate-400 text-xs block mb-1 flex items-center gap-1">
-                    <Award size={14} className="text-primary-500 shrink-0" /> Indikator Kualitatif
-                  </span>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-normal italic">
-                    {selectedProgram.ik_kualitatif ? `"${selectedProgram.ik_kualitatif}"` : <span className="text-slate-400 italic not-italic">N/A</span>}
-                  </p>
+                {/* Success Indicators */}
+                <div className="pt-3 border-t border-border border-dashed space-y-3">
+                  <div>
+                    <span className="text-slate-400 text-xs block mb-1.5 flex items-center gap-1">
+                      <Award size={14} className="text-primary-500 shrink-0" /> Indikator Kualitatif
+                    </span>
+                    {programIndicators.filter(ind => ind.type === 'KUALITATIF').length === 0 ? (
+                      <p className="text-xs text-slate-400 italic font-normal">Belum ada indikator kualitatif.</p>
+                    ) : (
+                      <ul className="list-disc pl-4 space-y-1">
+                        {programIndicators.filter(ind => ind.type === 'KUALITATIF').map(ind => (
+                          <li key={ind.id} className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
+                            {ind.indicator_text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/40">
+                    <span className="text-slate-400 text-xs block mb-1.5 flex items-center gap-1">
+                      <TrendingUp size={14} className="text-primary-500 shrink-0" /> Indikator Kuantitatif
+                    </span>
+                    {programIndicators.filter(ind => ind.type === 'KUANTITATIF').length === 0 ? (
+                      <p className="text-xs text-slate-400 italic font-normal">Belum ada indikator kuantitatif.</p>
+                    ) : (
+                      <ul className="list-disc pl-4 space-y-1.5">
+                        {programIndicators.filter(ind => ind.type === 'KUANTITATIF').map(ind => (
+                          <li key={ind.id} className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">{ind.indicator_text}</span>
+                            {ind.target !== undefined && (
+                              <span className="text-slate-400 ml-1">
+                                (Target: {ind.target} {ind.unit || ''}
+                                {ind.realization !== undefined ? `, Realisasi: ${ind.realization}` : ''})
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
 
                 {/* Description */}
@@ -1464,7 +1770,7 @@ export default function ProgramsPage() {
       )}
       {/* Delete Program Confirmation Modal */}
       {showDeleteConfirm && selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in">
           <div className="bg-surface border border-border rounded-3xl w-full max-w-sm p-6 shadow-2xl relative text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/20 text-red-600 flex items-center justify-center animate-bounce">
               <Trash2 size={24} />

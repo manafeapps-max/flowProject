@@ -118,7 +118,7 @@ CREATE TABLE programs (
     name VARCHAR(255) NOT NULL,
     status program_status_enum DEFAULT 'DRAFT',
     pjp_bidang_id UUID NOT NULL REFERENCES bidang(id), -- Penanggung Jawab Program (Structural)
-    pic_membership_id UUID NOT NULL REFERENCES memberships(id), -- Person in Charge (Execution)
+    pic_membership_id UUID NOT NULL REFERENCES members(id), -- Person in Charge (Execution)
     type_program_id UUID REFERENCES type_program(id) ON DELETE SET NULL,
     bidang_id UUID REFERENCES bidang(id) ON DELETE SET NULL,
     sub_bidang_id UUID REFERENCES organization_units(id) ON DELETE SET NULL,
@@ -145,6 +145,19 @@ CREATE TABLE program_responsibility_pp (
     bidang_id UUID NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
     period_id UUID NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
     UNIQUE(program_id, bidang_id)
+);
+
+-- Program Success Indicators
+CREATE TABLE program_indicators (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('KUALITATIF', 'KUANTITATIF')),
+    indicator_text TEXT NOT NULL,
+    target NUMERIC,
+    realization NUMERIC,
+    unit VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Occasions
@@ -349,6 +362,7 @@ ALTER TABLE unit_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_role ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE program_responsibility_pp ENABLE ROW LEVEL SECURITY;
+ALTER TABLE program_indicators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE coa ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY;
@@ -368,6 +382,7 @@ CREATE POLICY "Allow authenticated read" ON unit_members FOR SELECT TO authentic
 CREATE POLICY "Allow authenticated read" ON user_role FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "Allow authenticated read" ON programs FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "Allow authenticated read" ON program_responsibility_pp FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY "Allow authenticated read" ON program_indicators FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "Allow authenticated read" ON coa FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "Allow authenticated read" ON journals FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "Allow authenticated read" ON journal_lines FOR SELECT TO authenticated, anon USING (true);

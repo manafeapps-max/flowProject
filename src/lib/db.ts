@@ -133,6 +133,17 @@ export interface ProgramResponsibilityPP {
   sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
 }
 
+export interface ProgramIndicator {
+  id: string;
+  program_id: string;
+  type: 'KUALITATIF' | 'KUANTITATIF';
+  indicator_text: string;
+  target?: number;
+  realization?: number;
+  unit?: string;
+  sync_status: 'SYNCED' | 'PENDING' | 'ERROR';
+}
+
 export interface DeletedRecord {
   id: string;
   table_name: string;
@@ -163,6 +174,7 @@ export class CMPDatabase extends Dexie {
   user_profiles!: Table<UserProfile, string>;
   program_responsibility_pp!: Table<ProgramResponsibilityPP, string>;
   occasions!: Table<Occasion, string>;
+  program_indicators!: Table<ProgramIndicator, string>;
 
   constructor() {
     super('CMPDatabase');
@@ -286,6 +298,25 @@ export class CMPDatabase extends Dexie {
       user_profiles: 'id, email, sync_status',
       program_responsibility_pp: 'id, program_id, bidang_id, period_id, sync_status',
       occasions: 'id, period_id, date, sync_status'
+    });
+
+    // Version 9 (Added program_indicators store)
+    this.version(9).stores({
+      periods: 'id, is_active, sync_status',
+      organization_units: 'id, period_id, bidang_id, parent_id, sync_status',
+      programs: 'id, period_id, status, sync_status',
+      journals: 'id, period_id, status, sync_status',
+      anggaran_program: 'id, program_id, jenis_anggaran, sync_status',
+      type_program: 'id, sync_status',
+      bidang: 'id, period_id, sync_status',
+      deleted_records: 'id, table_name, sync_status',
+      members: 'id, email, status, sync_status',
+      unit_members: 'id, member_id, unit_id, unit_type, period_id, sync_status',
+      user_roles: 'id, user_id, role, period_id, sync_status',
+      user_profiles: 'id, email, sync_status',
+      program_responsibility_pp: 'id, program_id, bidang_id, period_id, sync_status',
+      occasions: 'id, period_id, date, sync_status',
+      program_indicators: 'id, program_id, type, sync_status'
     });
   }
 }

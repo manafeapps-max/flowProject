@@ -2,6 +2,23 @@ import { supabase } from './supabase';
 import { db } from './db';
 import { useAppStore } from '../store/useAppStore';
 
+function serializeError(err: any) {
+  if (err instanceof Error) {
+    return {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+    };
+  }
+  if (err && typeof err === 'object') {
+    return {
+      message: (err as any).message || 'Unknown error',
+      ...err,
+    };
+  }
+  return err;
+}
+
 // Pull changes from Supabase to Dexie
 export async function syncPull() {
   try {
@@ -203,9 +220,25 @@ export async function syncPull() {
       });
     }
 
+    // 10. Pull program indicators
+    const { data: indicators, error: indError } = await supabase.from('program_indicators').select('*');
+    if (indError) throw indError;
+    if (indicators) {
+      await db.transaction('rw', db.program_indicators, async () => {
+        const remoteIds = new Set(indicators.map(ind => ind.id));
+        const localItems = await db.program_indicators.toArray();
+        for (const item of localItems) {
+          if (!remoteIds.has(item.id) && item.sync_status === 'SYNCED') await db.program_indicators.delete(item.id);
+        }
+        for (const ind of indicators) {
+          await db.program_indicators.put({ ...ind, sync_status: 'SYNCED' });
+        }
+      });
+    }
+
     console.log('Sync Pull complete.');
   } catch (err) {
-    console.error('Sync Pull failed:', err);
+    console.error('Sync Pull failed:', serializeError(err));
     throw err;
   }
 }
@@ -230,51 +263,7 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 2. Push pending organization units
-    const pendingUnits = await db.organization_units.where('sync_status').equals('PENDING').toArray();
-    for (const u of pendingUnits) {
-      const { id, sync_status, ...rest } = u;
-      const { error } = await supabase.from('organization_units').upsert({ id, ...rest });
-      if (error) {
-        if (error.message.includes('period_id_fkey')) {
-          const period = await db.periods.get(u.period_id);
-          if (!period || period.sync_status === 'SYNCED') {
-            console.warn(`Deleting orphaned unit ${id} because its period ${u.period_id} does not exist on Supabase.`);
-            await db.organization_units.delete(id);
-            continue;
-          }
-        }
-        hasErrors = true;
-        await db.organization_units.update(id, { sync_status: 'ERROR' });
-        console.error(`Error syncing unit ${id}:`, error.message);
-      } else {
-        await db.organization_units.update(id, { sync_status: 'SYNCED' });
-      }
-    }
-
-    // 3. Push pending programs
-    const pendingPrograms = await db.programs.where('sync_status').equals('PENDING').toArray();
-    for (const pr of pendingPrograms) {
-      const { id, sync_status, ...rest } = pr;
-      const { error } = await supabase.from('programs').upsert({ id, ...rest });
-      if (error) {
-        if (error.message.includes('period_id_fkey')) {
-          const period = await db.periods.get(pr.period_id);
-          if (!period || period.sync_status === 'SYNCED') {
-            console.warn(`Deleting orphaned program ${id} because its period ${pr.period_id} does not exist on Supabase.`);
-            await db.programs.delete(id);
-            continue;
-          }
-        }
-        hasErrors = true;
-        await db.programs.update(id, { sync_status: 'ERROR' });
-        console.error(`Error syncing program ${id}:`, error.message);
-      } else {
-        await db.programs.update(id, { sync_status: 'SYNCED' });
-      }
-    }
-
-    // 3.5. Push pending program types
+    // 2. Push pending program types (type_program)
     const pendingTypePrograms = await db.type_program.where('sync_status').equals('PENDING').toArray();
     for (const tp of pendingTypePrograms) {
       const { id, sync_status, ...rest } = tp;
@@ -288,7 +277,21 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 3.6. Push pending bidang
+    // 3. Push pending members
+    const pendingMembers = await db.members.where('sync_status').equals('PENDING').toArray();
+    for (const m of pendingMembers) {
+      const { id, sync_status, ...rest } = m;
+      const { error } = await supabase.from('members').upsert({ id, ...rest });
+      if (error) {
+        hasErrors = true;
+        await db.members.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing member ${id}:`, error.message);
+      } else {
+        await db.members.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 4. Push pending bidang
     const pendingBidang = await db.bidang.where('sync_status').equals('PENDING').toArray();
     for (const bd of pendingBidang) {
       const { id, sync_status, ...rest } = bd;
@@ -310,7 +313,51 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 4. Push pending budgets (anggaran_program)
+    // 5. Push pending organization units (depends on periods and bidang)
+    const pendingUnits = await db.organization_units.where('sync_status').equals('PENDING').toArray();
+    for (const u of pendingUnits) {
+      const { id, sync_status, ...rest } = u;
+      const { error } = await supabase.from('organization_units').upsert({ id, ...rest });
+      if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(u.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned unit ${id} because its period ${u.period_id} does not exist on Supabase.`);
+            await db.organization_units.delete(id);
+            continue;
+          }
+        }
+        hasErrors = true;
+        await db.organization_units.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing unit ${id}:`, error.message);
+      } else {
+        await db.organization_units.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 6. Push pending programs (depends on periods, bidang, members, type_program, organization_units)
+    const pendingPrograms = await db.programs.where('sync_status').equals('PENDING').toArray();
+    for (const pr of pendingPrograms) {
+      const { id, sync_status, ...rest } = pr;
+      const { error } = await supabase.from('programs').upsert({ id, ...rest });
+      if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(pr.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned program ${id} because its period ${pr.period_id} does not exist on Supabase.`);
+            await db.programs.delete(id);
+            continue;
+          }
+        }
+        hasErrors = true;
+        await db.programs.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing program ${id}:`, error.message);
+      } else {
+        await db.programs.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 7. Push pending budgets (anggaran_program)
     const pendingBudgets = await db.anggaran_program.where('sync_status').equals('PENDING').toArray();
     for (const b of pendingBudgets) {
       const { id, sync_status, sub_total, ...rest } = b;
@@ -332,21 +379,51 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 5. Push pending members
-    const pendingMembers = await db.members.where('sync_status').equals('PENDING').toArray();
-    for (const m of pendingMembers) {
-      const { id, sync_status, ...rest } = m;
-      const { error } = await supabase.from('members').upsert({ id, ...rest });
+    // 8. Push pending program indicators
+    const pendingIndicators = await db.program_indicators.where('sync_status').equals('PENDING').toArray();
+    for (const ind of pendingIndicators) {
+      const { id, sync_status, ...rest } = ind;
+      const { error } = await supabase.from('program_indicators').upsert({ id, ...rest });
       if (error) {
+        if (error.message.includes('program_id_fkey')) {
+          const program = await db.programs.get(ind.program_id);
+          if (!program || program.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned program indicator ${id} because its program ${ind.program_id} does not exist on Supabase.`);
+            await db.program_indicators.delete(id);
+            continue;
+          }
+        }
         hasErrors = true;
-        await db.members.update(id, { sync_status: 'ERROR' });
-        console.error(`Error syncing member ${id}:`, error.message);
+        await db.program_indicators.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing program indicator ${id}:`, error.message);
       } else {
-        await db.members.update(id, { sync_status: 'SYNCED' });
+        await db.program_indicators.update(id, { sync_status: 'SYNCED' });
       }
     }
 
-    // 6. Push pending unit_members
+    // 9. Push pending program_responsibility_pp (depends on programs, bidang, periods)
+    const pendingPPs = await db.program_responsibility_pp.where('sync_status').equals('PENDING').toArray();
+    for (const pp of pendingPPs) {
+      const { id, sync_status, ...rest } = pp;
+      const { error } = await supabase.from('program_responsibility_pp').upsert({ id, ...rest });
+      if (error) {
+        if (error.message.includes('period_id_fkey')) {
+          const period = await db.periods.get(pp.period_id);
+          if (!period || period.sync_status === 'SYNCED') {
+            console.warn(`Deleting orphaned program_responsibility_pp ${id} because its period ${pp.period_id} does not exist on Supabase.`);
+            await db.program_responsibility_pp.delete(pp.id);
+            continue;
+          }
+        }
+        hasErrors = true;
+        await db.program_responsibility_pp.update(id, { sync_status: 'ERROR' });
+        console.error(`Error syncing program_responsibility_pp ${id}:`, error.message);
+      } else {
+        await db.program_responsibility_pp.update(id, { sync_status: 'SYNCED' });
+      }
+    }
+
+    // 10. Push pending unit_members (depends on members, organization_units, periods)
     const pendingUnitMembers = await db.unit_members.where('sync_status').equals('PENDING').toArray();
     for (const um of pendingUnitMembers) {
       const { id, sync_status, ...rest } = um;
@@ -368,7 +445,7 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 6.5. Push pending user roles
+    // 11. Push pending user roles (depends on periods)
     const pendingUserRoles = await db.user_roles.where('sync_status').equals('PENDING').toArray();
     for (const ur of pendingUserRoles) {
       const { id, sync_status, ...rest } = ur;
@@ -390,29 +467,7 @@ export async function syncPush(): Promise<boolean> {
       }
     }
 
-    // 6.6. Push pending program_responsibility_pp
-    const pendingPPs = await db.program_responsibility_pp.where('sync_status').equals('PENDING').toArray();
-    for (const pp of pendingPPs) {
-      const { id, sync_status, ...rest } = pp;
-      const { error } = await supabase.from('program_responsibility_pp').upsert({ id, ...rest });
-      if (error) {
-        if (error.message.includes('period_id_fkey')) {
-          const period = await db.periods.get(pp.period_id);
-          if (!period || period.sync_status === 'SYNCED') {
-            console.warn(`Deleting orphaned program_responsibility_pp ${id} because its period ${pp.period_id} does not exist on Supabase.`);
-            await db.program_responsibility_pp.delete(id);
-            continue;
-          }
-        }
-        hasErrors = true;
-        await db.program_responsibility_pp.update(id, { sync_status: 'ERROR' });
-        console.error(`Error syncing program_responsibility_pp ${id}:`, error.message);
-      } else {
-        await db.program_responsibility_pp.update(id, { sync_status: 'SYNCED' });
-      }
-    }
-
-    // 6.7. Push pending occasions
+    // 12. Push pending occasions (depends on periods)
     const pendingOccasions = await db.occasions.where('sync_status').equals('PENDING').toArray();
     for (const o of pendingOccasions) {
       const { id, sync_status, ...rest } = o;
@@ -450,7 +505,7 @@ export async function syncPush(): Promise<boolean> {
     console.log('Sync Push complete.');
     return hasErrors;
   } catch (err) {
-    console.error('Sync Push failed:', err);
+    console.error('Sync Push failed:', serializeError(err));
     throw err;
   }
 }
@@ -468,7 +523,7 @@ export async function syncAll() {
   store.setSyncStatus('syncing');
 
   try {
-    await db.transaction('rw', [db.periods, db.bidang, db.organization_units, db.unit_members, db.user_roles, db.program_responsibility_pp, db.occasions, db.programs, db.deleted_records], async () => {
+    await db.transaction('rw', [db.periods, db.bidang, db.organization_units, db.unit_members, db.user_roles, db.program_responsibility_pp, db.occasions, db.programs, db.program_indicators, db.deleted_records], async () => {
       // Self-healing: Reset any failed deletions in deleted_records to PENDING to retry them
       const failedDeletes = await db.deleted_records.where('sync_status').equals('ERROR').toArray();
       for (const fd of failedDeletes) {
@@ -590,9 +645,16 @@ export async function syncAll() {
 
       const orphanedOccasions = (await db.occasions.toArray()).filter(o => !periodIds.has(o.period_id));
       for (const o of orphanedOccasions) await db.occasions.delete(o.id);
+
+      // 7. Cleanup orphaned program indicators in Dexie
+      const programIds = new Set((await db.programs.toArray()).map(p => p.id));
+      const orphanedIndicators = (await db.program_indicators.toArray()).filter(ind => !programIds.has(ind.program_id));
+      for (const ind of orphanedIndicators) {
+        await db.program_indicators.delete(ind.id);
+      }
     });
   } catch (err) {
-    console.error('Local cleanup failed:', err);
+    console.error('Local cleanup failed:', serializeError(err));
   }
 
   try {
@@ -605,7 +667,7 @@ export async function syncAll() {
     }
     store.setLastSyncTime(new Date().toISOString());
   } catch (err) {
-    console.error('syncAll failed:', err);
+    console.error('syncAll failed:', serializeError(err));
     store.setSyncStatus('error');
   }
 }
