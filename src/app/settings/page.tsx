@@ -116,7 +116,16 @@ export default function SettingsPage() {
 
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab && ['fiscal', 'membership', 'struktur', 'appearance', 'iam', 'sync', 'calendar'].includes(tab)) {
+        setActiveTab(tab as any);
+      }
+    }
+  }, []);
 
   const isOnline = useAppStore(state => state.isOnline);
   const syncStatus = useAppStore(state => state.syncStatus);

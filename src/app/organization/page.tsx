@@ -24,10 +24,10 @@ export default function OrganizationPage() {
   })) as Period[];
 
   const { data: bidangsData, isLoading: loadingBidangs } = useQuery(
-    'SELECT id, name, created_at, updated_at FROM bidang WHERE deleted_at IS NULL ORDER BY name ASC'
+    'SELECT * FROM bidang WHERE deleted_at IS NULL ORDER BY name ASC'
   );
   const { data: unitsData, isLoading: loadingUnits } = useQuery(
-    'SELECT id, name, bidang_id, parent_id, created_at FROM organization_units WHERE deleted_at IS NULL ORDER BY name ASC'
+    'SELECT * FROM organization_units WHERE deleted_at IS NULL ORDER BY name ASC'
   );
   const { data: membersData, isLoading: loadingMembers } = useQuery(
     'SELECT id, name, email, phone, status, created_at FROM members WHERE deleted_at IS NULL ORDER BY name ASC'
@@ -321,7 +321,7 @@ export default function OrganizationPage() {
                 </p>
                 {activePeriod && canManageOrg && (
                   <a 
-                    href="/settings"
+                    href="/settings?tab=struktur"
                     className="flex items-center gap-1.5 bg-brand-primary hover:opacity-90 text-[oklch(0.985_0.005_90)] text-sm font-semibold px-5 py-2.5 rounded-2xl shadow-lg transition-transform active:scale-95"
                   >
                     Konfigurasi Struktur
