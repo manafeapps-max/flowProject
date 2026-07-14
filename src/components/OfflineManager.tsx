@@ -19,6 +19,13 @@ export default function OfflineManager({ children }: { children: React.ReactNode
     const online = navigator.onLine;
     setOnlineStatus(online);
 
+    // Register Service Worker for offline capabilities
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js')
+        .then((reg) => console.log('Service Worker registered with scope:', reg.scope))
+        .catch((err) => console.error('Service Worker registration failed:', err));
+    }
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
