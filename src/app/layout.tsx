@@ -44,7 +44,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PowerSyncWrapper>
             <OfflineManager>
-              <main className="min-h-screen px-page-x pb-[var(--spacing-safe-bottom)]">
+              <main className="min-h-screen px-page-x pt-4 md:pt-24 pb-[var(--spacing-safe-bottom)]">
                 {children}
               </main>
               <SyncStatusIndicator />

@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto py-6 pb-24">
-      <header className="mb-8 pt-4 flex justify-between items-center gap-4 bg-surface-elevated border border-border-subtle p-5 rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)]">
+      <header className="mb-8 pt-4 flex justify-between items-center gap-4 bg-surface-elevated border border-border-subtle p-5 rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)] md:hidden">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.20_0.02_260)] text-accent-valor flex items-center justify-center font-bold text-lg border border-border-subtle shadow-sm shrink-0">
             {user.email ? user.email.charAt(0).toUpperCase() : 'U'}
