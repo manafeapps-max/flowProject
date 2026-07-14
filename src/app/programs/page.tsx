@@ -796,7 +796,7 @@ export default function ProgramsPage() {
   };
 
   return (
-    <div className="py-6 pb-24">
+    <div className="py-6 pb-24 max-w-5xl mx-auto">
       <header className="mb-6 flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2 text-text-high">

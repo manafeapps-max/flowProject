@@ -559,7 +559,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="py-6 pb-24 max-w-4xl mx-auto">
+    <div className="py-6 pb-24 max-w-5xl mx-auto">
       <header className="mb-8 pt-4">
         <h1 className="text-3xl font-bold flex items-center gap-2 text-text-high"><Settings className="text-accent-valor animate-spin-slow" size={32} /> Global Settings</h1>
         <p className="text-text-muted text-sm mt-1">Configure organizational assets, fiscal years, and unified hierarchy.</p>
