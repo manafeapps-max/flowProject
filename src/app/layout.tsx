@@ -23,6 +23,11 @@ export const metadata: Metadata = {
   title: "FLOW - Church Management",
   description: "Offline-first Church Management Platform",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "FLOW",
+  },
   icons: {
     icon: "/icon_apps_flow.png",
     shortcut: "/icon_apps_flow.png",
