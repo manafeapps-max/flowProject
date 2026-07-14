@@ -86,7 +86,7 @@ export default function LoginPage() {
           </div>
         </div>
         <h2 className="mt-8 text-center text-3xl font-extrabold tracking-tight text-foreground">
-          {isSignUp ? "Create your account" : "Sign in to CMP v1.1"}
+          {isSignUp ? "Create your account" : "Sign in to Project 2.0"}
         </h2>
         <p className="mt-2 text-center text-sm text-slate-500">
           Church Management Platform

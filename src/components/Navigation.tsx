@@ -62,10 +62,15 @@ export default function Navigation() {
         <div className="w-full max-w-5xl mx-auto flex items-center justify-between px-6">
           {/* Logo / Branding */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.20_0.02_260)] border border-border-subtle flex items-center justify-center text-accent-valor shadow-sm group-hover:scale-105 transition-transform duration-300">
-              <span className="font-serif font-extrabold text-base">C</span>
+            <img 
+              src="/icon_apps_flow.png" 
+              alt="Flow Logo" 
+              className="w-9 h-9 object-contain rounded-xl shadow-sm group-hover:scale-105 transition-transform duration-300" 
+            />
+            <div className="flex flex-col justify-center">
+              <span className="font-serif font-bold text-base leading-none text-text-high">FLOW</span>
+              <span className="text-[8px] font-sans font-extrabold text-accent-valor tracking-wider uppercase mt-1 leading-none">Project 2.0</span>
             </div>
-            <span className="font-serif font-bold text-lg tracking-tight text-text-high">CMP v1.1</span>
           </Link>
 
           {/* Navigation Links */}

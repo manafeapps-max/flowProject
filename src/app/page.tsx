@@ -7,9 +7,33 @@ import { motion } from "framer-motion";
 import { easings } from "@/lib/motion";
 import CashFlowSummary from "@/components/dashboard/CashFlowSummary";
 import BudgetVariance from "@/components/dashboard/BudgetVariance";
+import { useQuery } from '@powersync/react';
+
+function getRelativeTime(dateStr: string) {
+  if (!dateStr) return 'N/A';
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Baru saja';
+  if (diffMins < 60) return `${diffMins} menit yang lalu`;
+  if (diffHours < 24) return `${diffHours} jam yang lalu`;
+  if (diffDays === 1) return 'Kemarin';
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function Dashboard() {
   const { user, currentUserRole, setUser, setCurrentUserRole } = useAppStore();
+  const { data: recentActivities = [] } = useQuery(
+    `SELECT id, name, status, updated_at, 'program' as type FROM programs WHERE deleted_at IS NULL
+     UNION ALL
+     SELECT id, reference_no as name, status, updated_at, 'journal' as type FROM journals WHERE deleted_at IS NULL
+     ORDER BY updated_at DESC
+     LIMIT 5`
+  );
 
   if (!user) {
     return (
@@ -17,7 +41,7 @@ export default function Dashboard() {
         <div className="w-20 h-20 bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.20_0.02_260)] rounded-full flex items-center justify-center mb-6 border border-border-subtle shadow-[var(--shadow-soft)]">
           <Activity className="text-accent-valor" size={40} />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome to CMP v1.1</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome to Project 2.0</h1>
         <p className="text-text-muted mb-8 max-w-sm">
           A mobile-first, offline-capable platform for structural and financial church management.
         </p>
@@ -93,20 +117,48 @@ export default function Dashboard() {
           <button className="text-accent-valor text-sm font-semibold hover:text-accent-valor/80 hover:underline transition-all">View All</button>
         </div>
         <div className="bg-surface-elevated border border-border-subtle rounded-[var(--radius-lg)] overflow-hidden shadow-[var(--shadow-soft)]">
-          {[1, 2, 3].map((_, i) => (
-            <div key={i} className="flex items-center justify-between p-4 border-b border-border-subtle last:border-0 active:bg-[oklch(0.96_0.005_90)] dark:active:bg-[oklch(0.25_0.02_260)] transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.20_0.02_260)] flex items-center justify-center text-accent-valor border border-border-subtle">
-                  <Activity size={18} />
-                </div>
-                <div>
-                  <h3 className="font-medium text-sm text-text-high">Program Draft Created</h3>
-                  <p className="text-xs text-text-muted">2 hours ago</p>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-text-disabled" />
+          {recentActivities.length === 0 ? (
+            <div className="p-8 text-center text-text-muted text-sm">
+              Belum ada aktivitas terbaru.
             </div>
-          ))}
+          ) : (
+            recentActivities.map((act: any) => {
+              const isProgram = act.type === 'program';
+              const href = isProgram ? `/programs` : `/ledger`;
+              const title = isProgram
+                ? act.status === 'DRAFT'
+                  ? `Draft Program "${act.name}" dibuat`
+                  : act.status === 'APPROVED'
+                  ? `Program "${act.name}" disetujui`
+                  : act.status === 'REJECTED'
+                  ? `Program "${act.name}" ditolak`
+                  : act.status === 'UNDER_REVIEW'
+                  ? `Program "${act.name}" ditinjau`
+                  : `Program "${act.name}" diperbarui`
+                : act.status === 'DRAFT'
+                ? `Draft Jurnal "${act.name}" dibuat`
+                : `Jurnal "${act.name}" diposting`;
+
+              return (
+                <Link 
+                  key={act.id} 
+                  href={href} 
+                  className="flex items-center justify-between p-4 border-b border-border-subtle last:border-0 hover:bg-[oklch(0.96_0.005_90)]/40 dark:hover:bg-[oklch(0.25_0.02_260)]/20 active:bg-[oklch(0.96_0.005_90)] dark:active:bg-[oklch(0.25_0.02_260)] transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.20_0.02_260)] flex items-center justify-center text-accent-valor border border-border-subtle">
+                      <Activity size={18} />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm text-text-high">{title}</h3>
+                      <p className="text-xs text-text-muted">{getRelativeTime(act.updated_at)}</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-text-disabled" />
+                </Link>
+              );
+            })
+          )}
         </div>
       </section>
     </div>

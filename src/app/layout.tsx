@@ -20,9 +20,14 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "CMP v1.1 - Church Management",
+  title: "FLOW - Church Management",
   description: "Offline-first Church Management Platform",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon_apps_flow.png",
+    shortcut: "/icon_apps_flow.png",
+    apple: "/icon_apps_flow.png",
+  }
 };
 
 export const viewport: Viewport = {
