@@ -522,7 +522,7 @@ export default function SettingsPage() {
         }
 
         await tx.execute(
-          'INSERT INTO user_roles (id, user_id, role, period_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO user_role (id, user_id, role, period_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
           [crypto.randomUUID(), targetUserId, iamRole, activeMembershipPeriodId, now, now]
         );
       });
@@ -540,7 +540,7 @@ export default function SettingsPage() {
       try {
         const now = new Date().toISOString();
         await powerSyncDb.writeTransaction(async (tx) => {
-          await tx.execute('UPDATE user_roles SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+          await tx.execute('UPDATE user_role SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
         });
       } catch (e) {
         console.error(e);
