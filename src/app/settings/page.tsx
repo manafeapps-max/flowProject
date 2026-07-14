@@ -157,8 +157,8 @@ export default function SettingsPage() {
   const activeMembershipPeriodId = activeMembershipPeriod?.id;
 
   const { data: myRolesData } = useQuery(
-    'SELECT id, user_id, role, period_id FROM user_role WHERE user_id = ? AND period_id = ? AND deleted_at IS NULL',
-    [currentUserId || '', activeMembershipPeriodId || '']
+    'SELECT id, user_id, role, period_id FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
+    [currentUserId || '', currentUser?.email || '', activeMembershipPeriodId || '']
   );
   const myRoles = (myRolesData || []) as any[];
 
@@ -489,6 +489,7 @@ export default function SettingsPage() {
   };
 
   const getRoleUserEmail = (userId: string) => {
+    if (userId.includes('@')) return userId;
     const profile = userProfilesList.find(p => p.id === userId);
     if (profile?.email) return profile.email;
     const member = membersList.find(m => m.id === userId);
@@ -517,7 +518,7 @@ export default function SettingsPage() {
             targetUserId = existingRole.user_id;
           } else {
             const memberFound = membersList.find(m => m.email?.toLowerCase() === emailLower);
-            targetUserId = memberFound?.id || crypto.randomUUID();
+            targetUserId = memberFound?.id || emailLower;
           }
         }
 

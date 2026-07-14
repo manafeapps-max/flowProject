@@ -54,8 +54,8 @@ export default function OrganizationPage() {
   const userRolesList = userRoleData || [];
 
   const { data: myRolesData, isLoading: loadingMyRoles } = useQuery(
-    'SELECT id, role FROM user_role WHERE user_id = ? AND period_id = ? AND deleted_at IS NULL',
-    [currentUser?.id || '', activePeriod?.id || '']
+    'SELECT id, role FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
+    [currentUser?.id || '', currentUser?.email || '', activePeriod?.id || '']
   );
   const myRoles = myRolesData || [];
 
