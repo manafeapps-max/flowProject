@@ -112,6 +112,8 @@ export default function SettingsPage() {
     return { fiscalPeriods: fiscal, membershipPeriods: membership, activeFiscalPeriod: activeFiscal, activeMembershipPeriod: activeMembership };
   }, [periodList]);
 
+  const activeMembershipPeriodId = activeMembershipPeriod?.id;
+
   const [activeTab, setActiveTab] = useState<'fiscal' | 'membership' | 'struktur' | 'appearance' | 'iam' | 'sync' | 'calendar'>('fiscal');
 
   const { theme, setTheme } = useTheme();
