@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from '@powersync/react';
 import { db as powerSyncDb } from '@/lib/powersync/client';
 import { Bidang, OrganizationUnit, Occasion } from '@/lib/powersync/types';
+import { supabase } from '@/lib/supabase';
 
 export interface Period {
   id: string;
@@ -135,8 +136,22 @@ export default function SettingsPage() {
   );
 
   const userRolesList = (userRolesData || []) as any[];
-  const userProfilesList: any[] = [];
+  const [userProfilesList, setUserProfilesList] = useState<any[]>([]);
   const membersList = (membersData || []) as any[];
+
+  useEffect(() => {
+    const fetchUserProfiles = async () => {
+      try {
+        const { data, error } = await supabase.from('user_profiles').select('id, email');
+        if (!error && data) {
+          setUserProfilesList(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user profiles:', err);
+      }
+    };
+    fetchUserProfiles();
+  }, []);
 
   const currentUserId = currentUser?.id;
   const activeMembershipPeriodId = activeMembershipPeriod?.id;
