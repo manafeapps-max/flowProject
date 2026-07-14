@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, Program, AnggaranProgram, Period, ProgramIndicator } from "@/lib/db";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from '@powersync/react';
+import { db as powerSyncDb } from '@/lib/powersync/client';
+import { Program, AnggaranProgram, Period, ProgramIndicator, Member, UnitMember, Bidang, OrganizationUnit, TypeProgram, ProgramResponsibilityPP } from '@/lib/powersync/types';
 import { useAppStore } from "@/store/useAppStore";
 import { 
   Briefcase, Plus, Filter, CircleArrowRight, CheckCircle2, Clock, X, 
   TrendingUp, TrendingDown, Coins, HelpCircle, Trash2, Calendar,
-  MapPin, Target, FileText, Award, Layers, User, Edit3
+  MapPin, Target, FileText, Award, Layers, User, Edit3, CalendarDays, Building2, Search
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { easings } from "@/lib/motion";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -72,15 +75,27 @@ const formatNumberWithCommas = (value: string | number) => {
 };
 
 export default function ProgramsPage() {
-  const programs = useLiveQuery(() => db.programs.toArray());
-  const units = useLiveQuery(() => db.organization_units.toArray());
-  const typePrograms = useLiveQuery(() => db.type_program.toArray());
-  const bidangs = useLiveQuery(() => db.bidang.toArray());
-  const subBidangs = useLiveQuery(() => db.organization_units.toArray().then(arr => arr.filter(u => u.parent_id !== null || !!u.bidang_id)));
-  const periods = useLiveQuery(() => db.periods.toArray());
-  const programPPs = useLiveQuery(() => db.program_responsibility_pp.toArray()) || [];
-  const members = useLiveQuery(() => db.members.toArray()) || [];
-  const unitMembers = useLiveQuery(() => db.unit_members.toArray()) || [];
+  const { data: programsData } = useQuery('SELECT * FROM programs WHERE deleted_at IS NULL');
+  const { data: unitsData } = useQuery('SELECT * FROM organization_units WHERE deleted_at IS NULL');
+  const { data: typeProgramsData } = useQuery('SELECT * FROM type_program WHERE deleted_at IS NULL');
+  const { data: bidangsData } = useQuery('SELECT * FROM bidang WHERE deleted_at IS NULL');
+  const { data: periodsData } = useQuery('SELECT * FROM periods WHERE deleted_at IS NULL');
+  const { data: programPPsData } = useQuery('SELECT * FROM program_responsibility_pp WHERE deleted_at IS NULL');
+  const { data: membersData } = useQuery('SELECT * FROM members WHERE deleted_at IS NULL');
+  const { data: unitMembersData } = useQuery('SELECT * FROM unit_members WHERE deleted_at IS NULL');
+
+  const programs = (programsData || []) as Program[];
+  const units = (unitsData || []) as OrganizationUnit[];
+  const typePrograms = (typeProgramsData || []) as TypeProgram[];
+  const bidangs = (bidangsData || []) as Bidang[];
+  const periods = (periodsData || []) as Period[];
+  const programPPs = (programPPsData || []) as ProgramResponsibilityPP[];
+  const members = (membersData || []) as Member[];
+  const unitMembers = (unitMembersData || []) as UnitMember[];
+
+  const subBidangs = useMemo(() => {
+    return units.filter((u: any) => u.parent_id !== null || !!u.bidang_id);
+  }, [units]);
 
   const getPeriodDurationYears = (p: Period) => {
     const start = new Date(p.start_date);
@@ -97,13 +112,15 @@ export default function ProgramsPage() {
   const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
   const currentUserRole = useAppStore(state => state.currentUserRole);
 
-  const userRolesList = useLiveQuery(() => db.user_roles.toArray()) || [];
-  const userProfilesList = useLiveQuery(() => db.user_profiles.toArray()) || [];
+  const { data: userRolesData } = useQuery('SELECT * FROM user_role WHERE deleted_at IS NULL');
+  const userRolesList = userRolesData || [];
+  const userProfilesList: any[] = [];
 
-  const myRoles = useLiveQuery(
-    () => currentUser && activePeriod ? db.user_roles.where({ user_id: currentUser.id, period_id: activePeriod.id }).toArray() : Promise.resolve<any[]>([]),
-    [currentUser, activePeriod]
+  const { data: myRolesData } = useQuery(
+    'SELECT * FROM user_role WHERE user_id = ? AND period_id = ? AND deleted_at IS NULL',
+    [currentUser?.id || '', activePeriod?.id || '']
   );
+  const myRoles = myRolesData || [];
 
   useEffect(() => {
     if (myRoles && myRoles.length > 0) {
@@ -123,26 +140,17 @@ export default function ProgramsPage() {
         if (isMigrated === "true") return;
 
         const PELKES_BIDANG_ID = '550e8400-e29b-41d4-a716-446655440010';
-        const localPrograms = await db.programs.toArray();
-        let updated = 0;
+        const now = new Date().toISOString();
+        
+        await powerSyncDb.writeTransaction(async (tx) => {
+          await tx.execute(
+            'UPDATE programs SET pjp_bidang_id = ?, updated_at = ? WHERE pjp_bidang_id <> ? AND deleted_at IS NULL',
+            [PELKES_BIDANG_ID, now, PELKES_BIDANG_ID]
+          );
+        });
 
-        for (const prog of localPrograms) {
-          if (prog.pjp_bidang_id !== PELKES_BIDANG_ID) {
-            await db.programs.update(prog.id, {
-              pjp_bidang_id: PELKES_BIDANG_ID,
-              sync_status: 'PENDING'
-            });
-            updated++;
-          }
-        }
-
-        console.log(`Local PJP to PELKES migration: updated ${updated} programs.`);
+        console.log(`Local PJP to PELKES migration executed.`);
         localStorage.setItem("pjp_migrated_to_pelkes_v1", "true");
-
-        if (updated > 0) {
-          const { syncAll } = await import("@/lib/sync");
-          syncAll();
-        }
       } catch (err) {
         console.error("Local PJP migration failed:", err);
       }
@@ -155,15 +163,16 @@ export default function ProgramsPage() {
   const isGlobalAdmin = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN';
 
   // Retrieve current user unit assignments
-  const userAssignments = useLiveQuery(
-    async () => {
-      if (!currentUser || !currentUser.email || !activeMembershipPeriod) return [];
-      const member = await db.members.where('email').equalsIgnoreCase(currentUser.email).first();
-      if (!member) return [];
-      return db.unit_members.where({ member_id: member.id, period_id: activeMembershipPeriod.id }).toArray();
-    },
-    [currentUser, activeMembershipPeriod]
-  ) || [];
+  const memberEmail = currentUser?.email || '';
+  const activePeriodId = activeMembershipPeriod?.id || '';
+  const { data: userAssignmentsData } = useQuery(
+    `SELECT um.* 
+     FROM unit_members um
+     JOIN members m ON um.member_id = m.id
+     WHERE LOWER(m.email) = LOWER(?) AND um.period_id = ? AND um.deleted_at IS NULL AND m.deleted_at IS NULL`,
+    [memberEmail, activePeriodId]
+  );
+  const userAssignments = (userAssignmentsData || []) as any[];
 
   const myBidangIds = (userAssignments || []).map(a => {
     if (a.unit_type === 'BIDANG') return a.unit_id;
@@ -178,6 +187,16 @@ export default function ProgramsPage() {
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [showAddBudgetModal, setShowAddBudgetModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   // Program Form
   const [isEditing, setIsEditing] = useState(false);
@@ -225,33 +244,38 @@ export default function ProgramsPage() {
   const [sumberDana, setSumberDana] = useState("");
   const [catatan, setCatatan] = useState("");
 
-  const programList = programs || [];
+  const filteredPrograms = (programs || []).filter(p => 
+    p.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+  );
+  const programList = filteredPrograms;
   const unitList = units || [];
   const typeProgramList = typePrograms || [];
   const bidangList = bidangs || [];
   const subBidangList = subBidangs || [];
-  const formSubBidangList = subBidangList.filter(s => 
+  const formSubBidangList = subBidangList.filter((s: OrganizationUnit) => 
     (s.bidang_id && s.bidang_id === bidangId) || 
     (s.parent_id && s.parent_id === bidangId)
   );
   const periodList = periods || [];
 
   // Query budget items dynamically for the selected program
-  const budgetLines = useLiveQuery(
-    () => selectedProgram ? db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray() : Promise.resolve<AnggaranProgram[]>([]),
-    [selectedProgram]
-  ) || [];
+  const { data: budgetLinesData } = useQuery(
+    'SELECT * FROM anggaran_program WHERE program_id = ? AND deleted_at IS NULL',
+    [selectedProgram?.id || '']
+  );
+  const budgetLines = (budgetLinesData || []) as AnggaranProgram[];
 
   // Query success indicators dynamically for the selected program
-  const programIndicators = useLiveQuery(
-    () => selectedProgram ? db.program_indicators.where('program_id').equals(selectedProgram.id).toArray() : Promise.resolve<ProgramIndicator[]>([]),
-    [selectedProgram]
-  ) || [];
+  const { data: programIndicatorsData } = useQuery(
+    'SELECT * FROM program_indicators WHERE program_id = ? AND deleted_at IS NULL',
+    [selectedProgram?.id || '']
+  );
+  const programIndicators = (programIndicatorsData || []) as ProgramIndicator[];
 
   const revenueItems = budgetLines.filter(item => item.jenis_anggaran === 'PENERIMAAN');
   const expenseItems = budgetLines.filter(item => item.jenis_anggaran === 'PENGELUARAN');
 
-  const totalRevenue = revenueItems.reduce((acc, curr) => acc + curr.sub_total, 0);
+  const totalRevenue = revenueItems.reduce((acc, curr) => acc + (curr.sub_total || 0), 0);
 
   useEffect(() => {
     const resolvePic = async () => {
@@ -261,73 +285,70 @@ export default function ProgramsPage() {
       }
       
       const picId = selectedProgram.pic_membership_id;
-      let member = null;
+      let member: any = null;
       
-      // 1. Try directly looking up by member ID in db.members
-      member = await db.members.get(picId);
-      
-      // 2. If not found, check if it's a user/membership ID by querying user_profiles for email
-      if (!member) {
-        const profile = await db.user_profiles.get(picId);
-        if (profile?.email) {
-          member = await db.members.where('email').equalsIgnoreCase(profile.email).first();
+      try {
+        // 1. Try directly looking up by member ID in members
+        member = await powerSyncDb.getOptional('SELECT * FROM members WHERE id = ? AND deleted_at IS NULL', [picId]);
+        
+        // 2. Fallback: Check if the user is stolaputih or benmanafe to match members
+        if (!member) {
+          if (picId === 'de641feb-9990-4057-ba23-6c66253e2fa9') {
+            member = await powerSyncDb.getOptional('SELECT * FROM members WHERE LOWER(email) = LOWER(?) AND deleted_at IS NULL', ['stolaputih@gmail.com']);
+          }
         }
-      }
-      
-      // 3. Fallback: Check if the user is stolaputih or benmanafe to match members
-      if (!member) {
-        if (picId === 'de641feb-9990-4057-ba23-6c66253e2fa9') {
-          member = await db.members.where('email').equalsIgnoreCase('stolaputih@gmail.com').first();
-        }
-      }
 
-      if (!member) {
-        setPicDetails({ name: 'Unknown Member', bidang: 'N/A' });
-        return;
-      }
-      
-      // Resolve Bidang
-      let bidangName = 'N/A';
-      const assignments = await db.unit_members.where('member_id').equals(member.id).toArray();
-      if (assignments.length > 0) {
-        const primary = assignments[0];
-        if (primary.unit_type === 'BIDANG') {
-          const bd = await db.bidang.get(primary.unit_id);
-          if (bd) bidangName = bd.name;
-        } else {
-          // It's a Sub-Bidang/Unit
-          const unit = await db.organization_units.get(primary.unit_id);
-          if (unit) {
-            const parentBidangId = unit.bidang_id || unit.parent_id;
-            if (parentBidangId) {
-              const bd = await db.bidang.get(parentBidangId);
-              if (bd) {
-                bidangName = `${bd.name} (${unit.name})`;
+        if (!member) {
+          setPicDetails({ name: 'Unknown Member', bidang: 'N/A' });
+          return;
+        }
+        
+        // Resolve Bidang
+        let bidangName = 'N/A';
+        const assignments = await powerSyncDb.getAll('SELECT * FROM unit_members WHERE member_id = ? AND deleted_at IS NULL', [member.id]) as any[];
+        if (assignments.length > 0) {
+          const primary = assignments[0];
+          if (primary.unit_type === 'BIDANG') {
+            const bd = await powerSyncDb.getOptional('SELECT name FROM bidang WHERE id = ? AND deleted_at IS NULL', [primary.unit_id]) as any;
+            if (bd) bidangName = bd.name;
+          } else {
+            // It's a Sub-Bidang/Unit
+            const unit = await powerSyncDb.getOptional('SELECT name, bidang_id, parent_id FROM organization_units WHERE id = ? AND deleted_at IS NULL', [primary.unit_id]) as any;
+            if (unit) {
+              const parentBidangId = unit.bidang_id || unit.parent_id;
+              if (parentBidangId) {
+                const bd = await powerSyncDb.getOptional('SELECT name FROM bidang WHERE id = ? AND deleted_at IS NULL', [parentBidangId]) as any;
+                if (bd) {
+                  bidangName = `${bd.name} (${unit.name})`;
+                } else {
+                  bidangName = unit.name;
+                }
               } else {
                 bidangName = unit.name;
               }
-            } else {
-              bidangName = unit.name;
             }
           }
         }
+        
+        setPicDetails({
+          name: member.name,
+          bidang: bidangName
+        });
+      } catch (err) {
+        console.error('Error resolving PIC details:', err);
+        setPicDetails({ name: 'Unknown Member', bidang: 'N/A' });
       }
-      
-      setPicDetails({
-        name: member.name,
-        bidang: bidangName
-      });
     };
     
     resolvePic();
-  }, [selectedProgram, members, unitMembers, bidangs]);
-  const totalExpense = expenseItems.reduce((acc, curr) => acc + curr.sub_total, 0);
+  }, [selectedProgram]);
+  const totalExpense = expenseItems.reduce((acc, curr) => acc + (curr.sub_total || 0), 0);
 
   const getCatatanAnggaran = () => {
     if (budgetLines.length === 0) return selectedProgram?.catatan_anggaran || '';
     
-    const revenueSummary = revenueItems.map(item => `${item.nama_anggaran} (Rp ${item.sub_total.toLocaleString('id-ID')})`).join(', ');
-    const expenseSummary = expenseItems.map(item => `${item.nama_anggaran} (Rp ${item.sub_total.toLocaleString('id-ID')})`).join(', ');
+    const revenueSummary = revenueItems.map(item => `${item.nama_anggaran} (Rp ${(item.sub_total || 0).toLocaleString('id-ID')})`).join(', ');
+    const expenseSummary = expenseItems.map(item => `${item.nama_anggaran} (Rp ${(item.sub_total || 0).toLocaleString('id-ID')})`).join(', ');
     
     return [
       revenueSummary ? `PENERIMAAN: ${revenueSummary}` : '',
@@ -387,8 +408,8 @@ export default function ProgramsPage() {
   const openEditModal = (prog: Program) => {
     setName(prog.name || "");
     setPjpBidangId(prog.pjp_bidang_id || "");
-    db.program_responsibility_pp.where('program_id').equals(prog.id).toArray().then(pps => {
-      setPpBidangIds(pps.map(pp => pp.bidang_id));
+    powerSyncDb.getAll('SELECT bidang_id FROM program_responsibility_pp WHERE program_id = ? AND deleted_at IS NULL', [prog.id]).then((pps: any[]) => {
+      setPpBidangIds(pps.map((pp: any) => pp.bidang_id));
     });
     setBidangId(prog.bidang_id || "");
     setSubBidangId(prog.sub_bidang_id || "");
@@ -401,13 +422,13 @@ export default function ProgramsPage() {
     setIkKualitatif(prog.ik_kualitatif || "");
     setDeskripsi(prog.deskripsi || "");
     
-    db.program_indicators.where('program_id').equals(prog.id).toArray().then(inds => {
-      setIndicatorsList(inds.map(ind => ({
+    powerSyncDb.getAll('SELECT * FROM program_indicators WHERE program_id = ? AND deleted_at IS NULL', [prog.id]).then((inds: any[]) => {
+      setIndicatorsList(inds.map((ind: any) => ({
         id: ind.id,
         type: ind.type,
         indicator_text: ind.indicator_text,
-        target: ind.target !== undefined ? String(ind.target) : "",
-        realization: ind.realization !== undefined ? String(ind.realization) : "",
+        target: ind.target !== null && ind.target !== undefined ? String(ind.target) : "",
+        realization: ind.realization !== null && ind.realization !== undefined ? String(ind.realization) : "",
         unit: ind.unit || ""
       })));
     });
@@ -451,58 +472,64 @@ export default function ProgramsPage() {
       if (waktuQuarters.Q4) selectedQuarters.push('4');
       const waktuVal = selectedQuarters.length > 0 ? selectedQuarters.join(', ') : undefined;
 
-      const member = currentUser && currentUser.email 
-        ? await db.members.where('email').equalsIgnoreCase(currentUser.email).first()
-        : null;
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO programs (
+            id, period_id, name, status, pjp_bidang_id, pic_membership_id, bidang_id, sub_bidang_id, type_program_id,
+            program_code, tujuan_program, tahun_anggaran, bulan, frekuensi, lokasi, deskripsi, ik_kualitatif, waktu,
+            anggaran_penerimaan, anggaran_pengeluaran, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            progId,
+            activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
+            name.trim(),
+            'DRAFT',
+            pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
+            picMembershipId || "de641feb-9990-4057-ba23-6c66253e2fa9",
+            bidangId || null,
+            subBidangId || null,
+            typeProgramId || null,
+            code,
+            tujuanProgram.trim() || null,
+            tahunAnggaran.trim() || null,
+            bulan ? parseInt(bulan, 10) : null,
+            parseInt(progFrekuensi, 10) || 1,
+            lokasi.trim() || null,
+            deskripsi.trim() || null,
+            ikKualitatif.trim() || null,
+            waktuVal || null,
+            0,
+            0,
+            nowStr,
+            nowStr
+          ]
+        );
 
-      const newProgram: Program = {
-        id: progId,
-        period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
-        name: name.trim(),
-        status: "DRAFT" as const,
-        pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
-        pic_membership_id: picMembershipId || "de641feb-9990-4057-ba23-6c66253e2fa9",
-        bidang_id: bidangId || undefined,
-        sub_bidang_id: subBidangId || undefined,
-        type_program_id: typeProgramId || undefined,
-        program_code: code,
-        tujuan_program: tujuanProgram.trim() || undefined,
-        tahun_anggaran: tahunAnggaran.trim() || undefined,
-        bulan: bulan ? parseInt(bulan, 10) : undefined,
-        frekuensi: parseInt(progFrekuensi, 10) || 1,
-        lokasi: lokasi.trim() || undefined,
-        deskripsi: deskripsi.trim() || undefined,
-        ik_kualitatif: ikKualitatif.trim() || undefined,
-        waktu: waktuVal,
-        anggaran_penerimaan: 0,
-        anggaran_pengeluaran: 0,
-        sync_status: "PENDING" as const,
-      };
+        for (const bId of ppBidangIds) {
+          await tx.execute(
+            'INSERT INTO program_responsibility_pp (id, program_id, bidang_id, period_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), progId, bId, activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000", nowStr, nowStr]
+          );
+        }
 
-      await db.programs.add(newProgram);
-
-      for (const bId of ppBidangIds) {
-        await db.program_responsibility_pp.add({
-          id: crypto.randomUUID(),
-          program_id: progId,
-          bidang_id: bId,
-          period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
-          sync_status: 'PENDING'
-        });
-      }
-
-      for (const ind of indicatorsList) {
-        await db.program_indicators.add({
-          id: crypto.randomUUID(),
-          program_id: progId,
-          type: ind.type,
-          indicator_text: ind.indicator_text,
-          target: ind.target ? parseFloat(ind.target) : undefined,
-          realization: ind.realization ? parseFloat(ind.realization) : undefined,
-          unit: ind.unit || undefined,
-          sync_status: 'PENDING'
-        });
-      }
+        for (const ind of indicatorsList) {
+          await tx.execute(
+            'INSERT INTO program_indicators (id, program_id, type, indicator_text, target, realization, unit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              crypto.randomUUID(),
+              progId,
+              ind.type,
+              ind.indicator_text,
+              ind.target ? parseFloat(ind.target) : null,
+              ind.realization ? parseFloat(ind.realization) : null,
+              ind.unit || null,
+              nowStr,
+              nowStr
+            ]
+          );
+        }
+      });
       setShowAddModal(false);
     } catch (err) {
       console.error("Failed to add program:", err);
@@ -527,63 +554,89 @@ export default function ProgramsPage() {
       if (waktuQuarters.Q4) selectedQuarters.push('4');
       const waktuVal = selectedQuarters.length > 0 ? selectedQuarters.join(', ') : null;
 
-      const updates: Partial<Program> = {
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        await tx.execute(
+          `UPDATE programs SET 
+            name = ?, pjp_bidang_id = ?, pic_membership_id = ?, bidang_id = ?, sub_bidang_id = ?, type_program_id = ?,
+            program_code = ?, tujuan_program = ?, tahun_anggaran = ?, bulan = ?, frekuensi = ?, lokasi = ?,
+            deskripsi = ?, ik_kualitatif = ?, waktu = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            name.trim(),
+            pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
+            picMembershipId,
+            bidangId || null,
+            subBidangId || null,
+            typeProgramId || null,
+            code,
+            tujuanProgram.trim() || null,
+            tahunAnggaran.trim() || null,
+            bulan ? parseInt(bulan, 10) : null,
+            parseInt(progFrekuensi, 10) || 1,
+            lokasi.trim() || null,
+            deskripsi.trim() || null,
+            ikKualitatif.trim() || null,
+            waktuVal || null,
+            nowStr,
+            selectedProgram.id
+          ]
+        );
+
+        // Soft delete old responsibility entries
+        await tx.execute(
+          'UPDATE program_responsibility_pp SET deleted_at = ?, updated_at = ? WHERE program_id = ? AND deleted_at IS NULL',
+          [nowStr, nowStr, selectedProgram.id]
+        );
+
+        for (const bId of ppBidangIds) {
+          await tx.execute(
+            'INSERT INTO program_responsibility_pp (id, program_id, bidang_id, period_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), selectedProgram.id, bId, activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000", nowStr, nowStr]
+          );
+        }
+
+        // Soft delete old indicators
+        await tx.execute(
+          'UPDATE program_indicators SET deleted_at = ?, updated_at = ? WHERE program_id = ? AND deleted_at IS NULL',
+          [nowStr, nowStr, selectedProgram.id]
+        );
+
+        for (const ind of indicatorsList) {
+          await tx.execute(
+            'INSERT INTO program_indicators (id, program_id, type, indicator_text, target, realization, unit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              ind.id || crypto.randomUUID(),
+              selectedProgram.id,
+              ind.type,
+              ind.indicator_text,
+              ind.target ? parseFloat(ind.target) : null,
+              ind.realization ? parseFloat(ind.realization) : null,
+              ind.unit || null,
+              nowStr,
+              nowStr
+            ]
+          );
+        }
+      });
+
+      const updates = {
         name: name.trim(),
         pjp_bidang_id: pjpBidangId || bidangList[0]?.id || "550e8400-e29b-41d4-a716-446655440010",
         pic_membership_id: picMembershipId,
-        bidang_id: bidangId || undefined,
-        sub_bidang_id: subBidangId || undefined,
-        type_program_id: typeProgramId || undefined,
+        bidang_id: bidangId || null,
+        sub_bidang_id: subBidangId || null,
+        type_program_id: typeProgramId || null,
         program_code: code,
-        tujuan_program: tujuanProgram.trim() || undefined,
-        tahun_anggaran: tahunAnggaran.trim() || undefined,
-        bulan: bulan ? parseInt(bulan, 10) : undefined,
+        tujuan_program: tujuanProgram.trim() || null,
+        tahun_anggaran: tahunAnggaran.trim() || null,
+        bulan: bulan ? parseInt(bulan, 10) : null,
         frekuensi: parseInt(progFrekuensi, 10) || 1,
-        lokasi: lokasi.trim() || undefined,
-        deskripsi: deskripsi.trim() || undefined,
-        ik_kualitatif: ikKualitatif.trim() || undefined,
-        waktu: waktuVal || undefined,
-        sync_status: "PENDING" as const,
+        lokasi: lokasi.trim() || null,
+        deskripsi: deskripsi.trim() || null,
+        ik_kualitatif: ikKualitatif.trim() || null,
+        waktu: waktuVal || null,
       };
-
-      await db.transaction('rw', [db.programs, db.program_responsibility_pp, db.program_indicators, db.deleted_records], async () => {
-        await db.programs.update(selectedProgram.id, updates);
-
-        const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
-        for (const pp of existingPPs) {
-          await db.program_responsibility_pp.delete(pp.id);
-          await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
-        }
-
-        for (const bId of ppBidangIds) {
-          await db.program_responsibility_pp.add({
-            id: crypto.randomUUID(),
-            program_id: selectedProgram.id,
-            bidang_id: bId,
-            period_id: activeMembershipPeriod?.id || "550e8400-e29b-41d4-a716-446655440000",
-            sync_status: 'PENDING'
-          });
-        }
-
-        const existingInds = await db.program_indicators.where('program_id').equals(selectedProgram.id).toArray();
-        for (const ind of existingInds) {
-          await db.program_indicators.delete(ind.id);
-          await db.deleted_records.add({ id: ind.id, table_name: 'program_indicators', sync_status: 'PENDING' });
-        }
-
-        for (const ind of indicatorsList) {
-          await db.program_indicators.add({
-            id: ind.id || crypto.randomUUID(),
-            program_id: selectedProgram.id,
-            type: ind.type,
-            indicator_text: ind.indicator_text,
-            target: ind.target ? parseFloat(ind.target) : undefined,
-            realization: ind.realization ? parseFloat(ind.realization) : undefined,
-            unit: ind.unit || undefined,
-            sync_status: 'PENDING'
-          });
-        }
-      });
       
       setSelectedProgram(prev => prev ? { ...prev, ...updates } : null);
       setShowAddModal(false);
@@ -599,37 +652,17 @@ export default function ProgramsPage() {
     if (!selectedProgram) return;
 
     try {
-      await db.transaction('rw', [db.programs, db.anggaran_program, db.program_responsibility_pp, db.program_indicators, db.deleted_records], async () => {
-        const programBudgetLines = await db.anggaran_program.where('program_id').equals(selectedProgram.id).toArray();
-        for (const line of programBudgetLines) {
-          await db.anggaran_program.delete(line.id);
-          await db.deleted_records.add({ id: line.id, table_name: 'anggaran_program', sync_status: 'PENDING' });
-        }
-
-        const existingPPs = await db.program_responsibility_pp.where('program_id').equals(selectedProgram.id).toArray();
-        for (const pp of existingPPs) {
-          await db.program_responsibility_pp.delete(pp.id);
-          await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
-        }
-
-        const existingInds = await db.program_indicators.where('program_id').equals(selectedProgram.id).toArray();
-        for (const ind of existingInds) {
-          await db.program_indicators.delete(ind.id);
-          await db.deleted_records.add({ id: ind.id, table_name: 'program_indicators', sync_status: 'PENDING' });
-        }
-
-        await db.programs.delete(selectedProgram.id);
-        await db.deleted_records.add({ id: selectedProgram.id, table_name: 'programs', sync_status: 'PENDING' });
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        // Soft delete all related tables
+        await tx.execute('UPDATE anggaran_program SET deleted_at = ?, updated_at = ? WHERE program_id = ? AND deleted_at IS NULL', [nowStr, nowStr, selectedProgram.id]);
+        await tx.execute('UPDATE program_responsibility_pp SET deleted_at = ?, updated_at = ? WHERE program_id = ? AND deleted_at IS NULL', [nowStr, nowStr, selectedProgram.id]);
+        await tx.execute('UPDATE program_indicators SET deleted_at = ?, updated_at = ? WHERE program_id = ? AND deleted_at IS NULL', [nowStr, nowStr, selectedProgram.id]);
+        await tx.execute('UPDATE programs SET deleted_at = ?, updated_at = ? WHERE id = ?', [nowStr, nowStr, selectedProgram.id]);
       });
 
       setSelectedProgram(null);
       setShowDeleteConfirm(false);
-
-      const isOnline = useAppStore.getState().isOnline;
-      if (isOnline) {
-        const { syncAll } = await import('@/lib/sync');
-        syncAll().catch(console.error);
-      }
     } catch (err) {
       console.error("Failed to delete program:", err);
     }
@@ -637,14 +670,22 @@ export default function ProgramsPage() {
 
   const recountProgramBudget = async (programId: string) => {
     try {
-      const lines = await db.anggaran_program.where('program_id').equals(programId).toArray();
-      const revenueTotal = lines.filter(l => l.jenis_anggaran === 'PENERIMAAN').reduce((acc, curr) => acc + curr.sub_total, 0);
-      const expenseTotal = lines.filter(l => l.jenis_anggaran === 'PENGELUARAN').reduce((acc, curr) => acc + curr.sub_total, 0);
-      await db.programs.update(programId, {
-        anggaran_penerimaan: revenueTotal,
-        anggaran_pengeluaran: expenseTotal,
-        sync_status: "PENDING" as const
+      const lines = await powerSyncDb.getAll(
+        'SELECT * FROM anggaran_program WHERE program_id = ? AND deleted_at IS NULL',
+        [programId]
+      ) as any[];
+      
+      const revenueTotal = lines.filter(l => l.jenis_anggaran === 'PENERIMAAN').reduce((acc, curr) => acc + ((curr.sub_total || 0) || (curr.volume * curr.harga_satuan * curr.frekuensi_pelaksanaan)), 0);
+      const expenseTotal = lines.filter(l => l.jenis_anggaran === 'PENGELUARAN').reduce((acc, curr) => acc + ((curr.sub_total || 0) || (curr.volume * curr.harga_satuan * curr.frekuensi_pelaksanaan)), 0);
+      
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        await tx.execute(
+          'UPDATE programs SET anggaran_penerimaan = ?, anggaran_pengeluaran = ?, updated_at = ? WHERE id = ?',
+          [revenueTotal, expenseTotal, nowStr, programId]
+        );
       });
+      
       setSelectedProgram(prev => prev && prev.id === programId ? {
         ...prev,
         anggaran_penerimaan: revenueTotal,
@@ -693,40 +734,36 @@ export default function ProgramsPage() {
       const freq = parseInt(frekuensi, 10) || 1;
       const calculatedSubtotal = vol * price * freq;
 
-      if (editingBudgetItem) {
-        const updates: Partial<AnggaranProgram> = {
-          jenis_anggaran: jenisAnggaran,
-          nama_anggaran: budgetItemName.trim(),
-          volume: vol,
-          satuan: satuan.trim(),
-          harga_satuan: price,
-          frekuensi_pelaksanaan: freq,
-          sumber_dana: jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : undefined,
-          catatan: catatan.trim() || undefined,
-          sub_total: calculatedSubtotal,
-          sync_status: "PENDING" as const,
-        };
-        await db.anggaran_program.update(editingBudgetItem.id, updates);
-        await recountProgramBudget(selectedProgram.id);
-      } else {
-        const newBudgetItem: AnggaranProgram = {
-          id: crypto.randomUUID(),
-          program_id: selectedProgram.id,
-          jenis_anggaran: jenisAnggaran,
-          nama_anggaran: budgetItemName.trim(),
-          volume: vol,
-          satuan: satuan.trim(),
-          harga_satuan: price,
-          sumber_harga: 'MANUAL',
-          frekuensi_pelaksanaan: freq,
-          sumber_dana: jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : undefined,
-          catatan: catatan.trim() || undefined,
-          sub_total: calculatedSubtotal,
-          sync_status: "PENDING" as const,
-        };
-        await db.anggaran_program.add(newBudgetItem);
-        await recountProgramBudget(selectedProgram.id);
-      }
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (editingBudgetItem) {
+          await tx.execute(
+            `UPDATE anggaran_program SET 
+              jenis_anggaran = ?, nama_anggaran = ?, volume = ?, satuan = ?, harga_satuan = ?,
+              frekuensi_pelaksanaan = ?, sumber_dana = ?, catatan = ?, sub_total = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              jenisAnggaran, budgetItemName.trim(), vol, satuan.trim(), price, freq,
+              jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : null,
+              catatan.trim() || null, calculatedSubtotal, nowStr, editingBudgetItem.id
+            ]
+          );
+        } else {
+          await tx.execute(
+            `INSERT INTO anggaran_program (
+              id, program_id, jenis_anggaran, nama_anggaran, volume, satuan, harga_satuan,
+              sumber_harga, frekuensi_pelaksanaan, sumber_dana, catatan, sub_total, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              crypto.randomUUID(), selectedProgram.id, jenisAnggaran, budgetItemName.trim(),
+              vol, satuan.trim(), price, 'MANUAL', freq,
+              jenisAnggaran === 'PENERIMAAN' ? (sumberDana.trim() || 'Internal') : null,
+              catatan.trim() || null, calculatedSubtotal, nowStr, nowStr
+            ]
+          );
+        }
+      });
+      await recountProgramBudget(selectedProgram.id);
 
       setBudgetItemName("");
       setVolume("1");
@@ -748,63 +785,80 @@ export default function ProgramsPage() {
     if (!canEditPrograms) return;
     if (!selectedProgram) return;
     try {
-      await db.transaction('rw', [db.anggaran_program, db.programs, db.deleted_records], async () => {
-        await db.anggaran_program.delete(id);
-        await db.deleted_records.add({ id, table_name: 'anggaran_program', sync_status: 'PENDING' });
-        await recountProgramBudget(selectedProgram.id);
+      const nowStr = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
+        await tx.execute('UPDATE anggaran_program SET deleted_at = ?, updated_at = ? WHERE id = ?', [nowStr, nowStr, id]);
       });
-
-      const isOnline = useAppStore.getState().isOnline;
-      if (isOnline) {
-        const { syncAll } = await import('@/lib/sync');
-        syncAll().catch(console.error);
-      }
+      await recountProgramBudget(selectedProgram.id);
     } catch (err) {
       console.error("Failed to delete budget item:", err);
     }
   };
 
   return (
-    <div className="p-6 pb-24">
+    <div className="py-6 pb-24">
       <header className="mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Briefcase className="text-primary-600" /> Programs
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-text-high">
+            <Briefcase className="text-accent-valor" /> Programs
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Budget planning & tracking</p>
+          <p className="text-text-muted text-sm mt-1">Budget planning & tracking</p>
         </div>
         <div className="flex gap-2">
-          <button className="bg-surface border border-border text-slate-700 p-3 rounded-full shadow-sm active:scale-95 transition-transform">
+          <button className="bg-surface-elevated border border-border-subtle hover:border-border-strong text-text-high p-3 rounded-full shadow-sm active:scale-95 transition-all hover:scale-105 hover:bg-surface-base">
             <Filter size={20} />
           </button>
           {canEditPrograms && (
-            <button 
+            <motion.button 
               onClick={openAddModal}
-              className="bg-primary-600 text-white p-3 rounded-full shadow-lg shadow-primary-500/30 active:scale-95 transition-transform"
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.1, ease: easings.spring }}
+              className="bg-brand-primary hover:brightness-110 text-[oklch(0.985_0.005_90)] p-3 rounded-full shadow-lg cursor-pointer"
             >
               <Plus size={20} />
-            </button>
+            </motion.button>
           )}
         </div>
       </header>
 
+      <div className="mb-6 relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-text-muted" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="appearance-none block w-full pl-11 pr-4 py-3 border border-border-subtle rounded-2xl bg-surface-elevated placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-accent-valor focus:border-transparent transition-all sm:text-sm shadow-sm text-text-high"
+          placeholder="Cari program berdasarkan nama..."
+        />
+      </div>
+
       <section className="space-y-4">
-        {programList.length === 0 ? (
+        {programs.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             No programs found. Click the + button to add one.
           </div>
+        ) : programList.length === 0 ? (
+          <div className="bg-surface-elevated border border-border-subtle p-12 rounded-3xl text-center text-text-muted">
+            <HelpCircle className="mx-auto text-text-disabled mb-3" size={40} />
+            <p className="text-sm font-medium">Tidak ada hasil pencarian untuk "{searchQuery}".</p>
+          </div>
         ) : (
           programList.map(program => (
-            <div 
+            <motion.div 
               key={program.id} 
               onClick={() => setSelectedProgram(program)}
-              className="bg-surface border border-border rounded-3xl p-5 shadow-sm active:scale-[0.99] transition-transform flex flex-col gap-4 cursor-pointer hover:border-primary-300"
+              whileHover={{ scale: 1.015 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.15, ease: easings.smooth }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-5 shadow-[var(--shadow-soft)] flex flex-col gap-4 cursor-pointer hover:border-accent-valor/50 hover:shadow-[var(--shadow-medium)]"
             >
               <div className="flex justify-between items-start gap-4">
                 <div>
-                  <h2 className="font-semibold text-lg leading-tight">{program.name}</h2>
-                  <span className="text-xs text-slate-400 mt-1 block">
-                    Sync Status: {program.sync_status}
+                  <h2 className="font-semibold text-lg leading-tight text-text-high">{program.name}</h2>
+                  <span className="text-xs text-text-muted mt-1 block">
+                    Sync Status: SYNCED
                   </span>
                 </div>
                 <div className={`px-3 py-1 rounded-full border text-xs font-semibold flex items-center gap-1 shrink-0 ${getStatusColor(program.status)}`}>
@@ -813,34 +867,49 @@ export default function ProgramsPage() {
                 </div>
               </div>
               
-              <div className="flex items-center justify-between gap-4 pt-4 border-t border-dashed border-border text-xs">
+              <div className="flex items-center justify-between gap-4 pt-4 border-t border-dashed border-border-subtle text-xs">
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Penerimaan</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                  <span className="text-text-muted block mb-0.5">Penerimaan</span>
+                  <span className="font-bold text-[oklch(0.62_0.17_150)] dark:text-[oklch(0.72_0.17_150)] text-sm font-serif tabular-nums">
                     Rp {(program.anggaran_penerimaan || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-slate-400 block mb-0.5">Pengeluaran</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                  <span className="text-text-muted block mb-0.5">Pengeluaran</span>
+                  <span className="font-bold text-text-high text-sm font-serif tabular-nums">
                     Rp {(program.anggaran_pengeluaran || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))
         )}
       </section>
 
       {/* Program Add/Edit Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[60] animate-fade-in">
-          <div className="bg-surface border-l border-border w-full max-w-xl h-full flex flex-col shadow-2xl relative animate-slide-left">
-            <header className="p-6 border-b border-border flex justify-between items-center shrink-0">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Briefcase className="text-primary-600" />
-                {isEditing ? "Edit Program" : "Add Program"}
-              </h2>
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex justify-end z-[60]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.4, ease: easings.smooth }}
+              className="bg-surface-elevated border-l border-border-subtle w-full max-w-xl h-full flex flex-col shadow-2xl relative z-10"
+            >
+              <header className="p-6 border-b border-border-subtle flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold flex items-center gap-2 text-text-high">
+                  <Briefcase className="text-accent-valor" />
+                  {isEditing ? "Edit Program" : "Add Program"}
+                </h2>
               <button 
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -914,7 +983,7 @@ export default function ProgramsPage() {
                         className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
                       >
                         <option value="">-- Choose Sub-Bidang --</option>
-                        {formSubBidangList.map(s => (
+                        {formSubBidangList.map((s: any) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
                       </select>
@@ -1206,65 +1275,81 @@ export default function ProgramsPage() {
                 </div>
               </div>
 
-              <div className="p-6 border-t border-border bg-surface flex justify-end gap-3 shrink-0">
+              <div className="p-6 border-t border-border-subtle bg-surface-elevated flex justify-end gap-3 shrink-0">
                 <button 
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-6 py-3 border border-border rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                  className="px-6 py-3 border border-border-subtle rounded-2xl text-sm font-semibold text-text-muted hover:bg-[oklch(0.96_0.005_90)] dark:hover:bg-[oklch(0.20_0.02_260)]"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-primary-500/20 active:scale-95 flex items-center gap-1.5"
+                  className="px-6 py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold transition-colors disabled:opacity-50 shadow-lg active:scale-95 flex items-center gap-1.5"
                 >
                   {submitting ? "Saving..." : (isEditing ? "Save Changes" : "Create Program")}
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* Program Details Sheet / Modal */}
-      {selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[55] animate-fade-in">
-          <div className="bg-surface border-l border-border w-full max-w-lg h-full flex flex-col shadow-2xl relative animate-slide-left overflow-hidden">
-            <header className="p-6 border-b border-border flex justify-between items-start">
-              <div>
-                <span className="text-xs uppercase font-bold text-primary-600 tracking-wide flex items-center gap-1.5 mb-1.5">
-                  <Calendar size={14} /> Program Details
-                </span>
-                <h2 className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{selectedProgram.name}</h2>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {canEditPrograms && (
-                  <>
-                    <button 
-                      onClick={() => openEditModal(selectedProgram)}
-                      title="Edit Program"
-                      className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-primary-600 transition-colors"
-                    >
-                      <Edit3 size={18} />
-                    </button>
-                    <button 
-                      onClick={() => setShowDeleteConfirm(true)}
-                      title="Delete Program"
-                      className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </>
-                )}
-                <button 
-                  onClick={() => setSelectedProgram(null)}
-                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors ml-1"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </header>
+      <AnimatePresence>
+        {selectedProgram && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex justify-end z-[55]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setSelectedProgram(null)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.4, ease: easings.smooth }}
+              className="bg-surface-elevated border-l border-border-subtle w-full max-w-lg h-full flex flex-col shadow-2xl relative z-10 overflow-hidden"
+            >
+              <header className="p-6 border-b border-border-subtle flex justify-between items-start shrink-0">
+                <div>
+                  <span className="text-xs uppercase font-bold text-accent-valor tracking-wide flex items-center gap-1.5 mb-1.5">
+                    <Calendar size={14} /> Program Details
+                  </span>
+                  <h2 className="text-xl font-bold leading-tight text-text-high">{selectedProgram.name}</h2>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {canEditPrograms && (
+                    <>
+                      <button 
+                        onClick={() => openEditModal(selectedProgram)}
+                        title="Edit Program"
+                        className="p-2 rounded-full hover:bg-[oklch(0.96_0.005_90)] dark:hover:bg-[oklch(0.20_0.02_260)] text-text-muted hover:text-accent-valor transition-colors"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setShowDeleteConfirm(true)}
+                        title="Delete Program"
+                        className="p-2 rounded-full hover:bg-[oklch(0.95_0.02_20)] dark:hover:bg-[oklch(0.25_0.05_20)] text-text-muted hover:text-[oklch(0.6_0.2_20)] transition-colors"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    onClick={() => setSelectedProgram(null)}
+                    className="p-2 rounded-full hover:bg-[oklch(0.96_0.005_90)] dark:hover:bg-[oklch(0.20_0.02_260)] text-text-muted hover:text-text-high transition-colors ml-1"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </header>
 
             <div className="flex-1 p-6 space-y-6 overflow-y-auto">
               {/* Program Metadata Section */}
@@ -1309,7 +1394,7 @@ export default function ProgramsPage() {
                     <span className="text-slate-400 block mb-1">Sub-Bidang</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 font-sans">
                       <Layers size={14} className="text-primary-500 shrink-0" />
-                      <span className="truncate">{subBidangList.find(s => s.id === selectedProgram.sub_bidang_id)?.name || 'N/A'}</span>
+                      <span className="truncate">{subBidangList.find((s: any) => s.id === selectedProgram.sub_bidang_id)?.name || 'N/A'}</span>
                     </span>
                   </div>
                   <div>
@@ -1508,7 +1593,7 @@ export default function ProgramsPage() {
                           <div className="text-right mr-2">
                             <span className="text-[10px] text-slate-400 block mb-0.5">Sub Total</span>
                             <span className="font-bold text-sm text-emerald-600 block">
-                              Rp {((item.sub_total !== undefined && item.sub_total !== null) ? item.sub_total : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
+                              Rp {(((item.sub_total || 0) !== undefined && (item.sub_total || 0) !== null) ? (item.sub_total || 0) : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
                             </span>
                           </div>
                           {canEditPrograms && (
@@ -1565,7 +1650,7 @@ export default function ProgramsPage() {
                           <div className="text-right mr-2">
                             <span className="text-[10px] text-slate-400 block mb-0.5">Sub Total</span>
                             <span className="font-bold text-sm text-slate-800 dark:text-slate-200 block">
-                              Rp {((item.sub_total !== undefined && item.sub_total !== null) ? item.sub_total : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
+                              Rp {(((item.sub_total || 0) !== undefined && (item.sub_total || 0) !== null) ? (item.sub_total || 0) : (item.volume * item.harga_satuan * item.frekuensi_pelaksanaan)).toLocaleString('id-ID')}
                             </span>
                           </div>
                           {canEditPrograms && (
@@ -1596,211 +1681,247 @@ export default function ProgramsPage() {
 
             {/* Quick Actions at footer */}
             {canEditPrograms && (
-              <div className="p-4 border-t border-border bg-surface flex gap-2 shrink-0">
+              <div className="p-4 border-t border-border-subtle bg-surface-elevated flex gap-2 shrink-0">
                 <button 
                   onClick={openAddBudgetModal}
-                  className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/15 active:scale-[0.98] transition-all"
+                  className="flex-1 py-3.5 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all"
                 >
                   <Plus size={18} /> Add Budget Item
                 </button>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* Add Budget Item Modal */}
-      {showAddBudgetModal && selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl w-full max-w-md max-h-[75vh] flex flex-col shadow-2xl relative overflow-hidden">
-            <header className="p-6 border-b border-border flex justify-between items-center shrink-0">
-              <h2 className="text-xl font-bold">
-                {editingBudgetItem ? "Edit Budget Line" : "Add Budget Line"}
-              </h2>
-              <button 
-                onClick={() => {
-                  setShowAddBudgetModal(false);
-                  setEditingBudgetItem(null);
-                }}
-                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </header>
-            
-            <form onSubmit={handleSaveBudgetItem} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Budget Item Name
-                  </label>
-                  <input 
-                    type="text" 
-                    required
-                    value={budgetItemName}
-                    onChange={(e) => setBudgetItemName(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    placeholder="e.g. Uang Rapat, Sewa Mobil"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Type
-                    </label>
-                    <select 
-                      value={jenisAnggaran}
-                      onChange={(e) => setJenisAnggaran(e.target.value as any)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                    >
-                      <option value="PENGELUARAN">Expense</option>
-                      <option value="PENERIMAAN">Revenue</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Unit / Satuan
-                    </label>
-                    <input 
-                      type="text" 
-                      value={satuan}
-                      onChange={(e) => setSatuan(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                      placeholder="e.g. Orang, Unit"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Volume
-                    </label>
-                    <input 
-                      type="number" 
-                      required
-                      value={volume}
-                      onChange={(e) => setVolume(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                      placeholder="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Frequency
-                    </label>
-                    <input 
-                      type="number" 
-                      required
-                      value={frekuensi}
-                      onChange={(e) => setFrekuensi(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                      placeholder="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Price (Rp)
-                    </label>
-                    <input 
-                      type="text" 
-                      inputMode="numeric"
-                      pattern="[0-9,]*"
-                      required
-                      value={hargaSatuan}
-                      onChange={(e) => setHargaSatuan(formatNumberWithCommas(e.target.value))}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-
-                {jenisAnggaran === 'PENERIMAAN' && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Source of Funds
-                    </label>
-                    <input 
-                      type="text" 
-                      value={sumberDana}
-                      onChange={(e) => setSumberDana(e.target.value)}
-                      className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                      placeholder="e.g. Dana MS, Persembahan Khusus"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Catatan / Notes
-                  </label>
-                  <textarea 
-                    value={catatan}
-                    onChange={(e) => setCatatan(e.target.value)}
-                    className="w-full px-4 py-2 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none h-16 resize-none"
-                    placeholder="Additional description..."
-                  />
-                </div>
-
-                {/* Live Preview of Sub Total */}
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border flex justify-between items-center mt-2 shrink-0">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Sub Total Preview</span>
-                  <span className="font-bold text-lg text-primary-600">
-                    Rp {((parseFloat(volume) || 0) * (parseFloat(hargaSatuan.replace(/[^0-9]/g, '')) || 0) * (parseInt(frekuensi, 10) || 1)).toLocaleString('id-ID')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-6 border-t border-border bg-surface shrink-0">
+      <AnimatePresence>
+        {showAddBudgetModal && selectedProgram && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => {
+                setShowAddBudgetModal(false);
+                setEditingBudgetItem(null);
+              }}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl w-full max-w-md max-h-[75vh] flex flex-col shadow-2xl relative overflow-hidden z-10"
+            >
+              <header className="p-6 border-b border-border-subtle flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold text-text-high">
+                  {editingBudgetItem ? "Edit Budget Line" : "Add Budget Line"}
+                </h2>
                 <button 
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-primary-500/10 active:scale-95"
+                  onClick={() => {
+                    setShowAddBudgetModal(false);
+                    setEditingBudgetItem(null);
+                  }}
+                  className="p-1.5 rounded-full hover:bg-[oklch(0.96_0.005_90)] dark:hover:bg-[oklch(0.20_0.02_260)] text-text-muted hover:text-text-high transition-colors"
                 >
-                  {submitting ? "Saving..." : (editingBudgetItem ? "Save Changes" : "Add Budget Line")}
+                  <X size={20} />
+                </button>
+              </header>
+              
+              <form onSubmit={handleSaveBudgetItem} className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-muted mb-1">
+                      Budget Item Name
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      value={budgetItemName}
+                      onChange={(e) => setBudgetItemName(e.target.value)}
+                      className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                      placeholder="e.g. Uang Rapat, Sewa Mobil"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Type
+                      </label>
+                      <select 
+                        value={jenisAnggaran}
+                        onChange={(e) => setJenisAnggaran(e.target.value as any)}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                      >
+                        <option value="PENGELUARAN">Expense</option>
+                        <option value="PENERIMAAN">Revenue</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Unit / Satuan
+                      </label>
+                      <input 
+                        type="text" 
+                        value={satuan}
+                        onChange={(e) => setSatuan(e.target.value)}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                        placeholder="e.g. Orang, Unit"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Volume
+                      </label>
+                      <input 
+                        type="number" 
+                        required
+                        value={volume}
+                        onChange={(e) => setVolume(e.target.value)}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                        placeholder="1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Frequency
+                      </label>
+                      <input 
+                        type="number" 
+                        required
+                        value={frekuensi}
+                        onChange={(e) => setFrekuensi(e.target.value)}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                        placeholder="1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Price (Rp)
+                      </label>
+                      <input 
+                        type="text" 
+                        inputMode="numeric"
+                        pattern="[0-9,]*"
+                        required
+                        value={hargaSatuan}
+                        onChange={(e) => setHargaSatuan(formatNumberWithCommas(e.target.value))}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {jenisAnggaran === 'PENERIMAAN' && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-muted mb-1">
+                        Source of Funds
+                      </label>
+                      <input 
+                        type="text" 
+                        value={sumberDana}
+                        onChange={(e) => setSumberDana(e.target.value)}
+                        className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-text-high font-medium text-sm"
+                        placeholder="e.g. Dana MS, Persembahan Khusus"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-muted mb-1">
+                      Catatan / Notes
+                    </label>
+                    <textarea 
+                      value={catatan}
+                      onChange={(e) => setCatatan(e.target.value)}
+                      className="w-full px-4 py-2 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none h-16 resize-none text-text-high font-medium text-sm"
+                      placeholder="Additional description..."
+                    />
+                  </div>
+
+                  {/* Live Preview of Sub Total */}
+                  <div className="bg-[oklch(0.96_0.005_90)] dark:bg-[oklch(0.12_0.02_260)] p-4 rounded-2xl border border-border-subtle flex justify-between items-center mt-2 shrink-0">
+                    <span className="text-xs font-semibold text-text-muted uppercase">Sub Total Preview</span>
+                    <span className="font-bold text-lg text-accent-valor font-serif tabular-nums">
+                      Rp {((parseFloat(volume) || 0) * (parseFloat(hargaSatuan.replace(/[^0-9]/g, '')) || 0) * (parseInt(frekuensi, 10) || 1)).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-6 border-t border-border-subtle bg-surface-elevated shrink-0">
+                  <button 
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-3.5 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold disabled:opacity-50 shadow-lg active:scale-95 transition-all"
+                  >
+                    {submitting ? "Saving..." : (editingBudgetItem ? "Save Changes" : "Add Budget Line")}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Delete Program Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && selectedProgram && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-[70]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowDeleteConfirm(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl w-full max-w-sm p-6 shadow-2xl relative text-center space-y-4 z-10"
+            >
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/20 text-[oklch(0.6_0.2_20)] flex items-center justify-center animate-bounce">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-high">Delete Program?</h3>
+                <p className="text-xs text-text-muted mt-2 leading-relaxed">
+                  Are you sure you want to delete <span className="font-semibold text-text-high">"{selectedProgram.name}"</span>?
+                  This action is permanent and will cascade-delete all its detailed budget lines.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-3 border border-border-subtle rounded-2xl text-xs font-semibold text-text-high hover:bg-[oklch(0.96_0.005_90)] dark:hover:bg-[oklch(0.20_0.02_260)] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleDeleteProgram}
+                  className="flex-1 py-3 bg-[oklch(0.6_0.2_20)] text-white rounded-2xl text-xs font-semibold shadow-lg active:scale-95 transition-all"
+                >
+                  Delete Program
                 </button>
               </div>
-            </form>
+            </motion.div>
           </div>
-        </div>
-      )}
-      {/* Delete Program Confirmation Modal */}
-      {showDeleteConfirm && selectedProgram && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl w-full max-w-sm p-6 shadow-2xl relative text-center space-y-4">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/20 text-red-600 flex items-center justify-center animate-bounce">
-              <Trash2 size={24} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Delete Program?</h3>
-              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Are you sure you want to delete <span className="font-semibold text-slate-700 dark:text-slate-300">"{selectedProgram.name}"</span>?
-                This action is permanent and will cascade-delete all its detailed budget lines.
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button 
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-3 border border-border rounded-2xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                type="button"
-                onClick={handleDeleteProgram}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-semibold shadow-lg shadow-red-500/10 active:scale-95 transition-all"
-              >
-                Delete Program
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

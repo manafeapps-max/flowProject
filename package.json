@@ -9,9 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@powersync/react": "^1.10.0",
+    "@powersync/web": "^1.38.7",
     "@supabase/supabase-js": "^2.108.1",
-    "dexie": "^4.4.3",
-    "dexie-react-hooks": "^4.4.0",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.18.0",
     "next": "16.2.9",

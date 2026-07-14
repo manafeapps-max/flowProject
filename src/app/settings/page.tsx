@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, Period, Bidang, OrganizationUnit, Occasion } from "@/lib/db";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from '@powersync/react';
+import { db as powerSyncDb } from '@/lib/powersync/client';
+import { Bidang, OrganizationUnit, Occasion } from '@/lib/powersync/types';
+
+export interface Period {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  sync_status?: 'SYNCED' | 'PENDING' | 'ERROR';
+}
 import { useTheme } from "next-themes";
 import { useAppStore } from "@/store/useAppStore";
 import { 
@@ -12,6 +22,8 @@ import {
   Shield, Key, UserCheck, RefreshCw, Wifi, WifiOff, Database,
   CalendarDays
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { easings } from "@/lib/motion";
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return "";
@@ -59,14 +71,30 @@ const SyncBadge = ({ status }: { status?: string }) => {
 };
 
 export default function SettingsPage() {
-  const periods = useLiveQuery(() => db.periods.toArray());
-  const bidangs = useLiveQuery(() => db.bidang.toArray());
-  const units = useLiveQuery(() => db.organization_units.toArray());
+  const { data: powerSyncPeriods } = useQuery(
+    'SELECT id, name, start_date, end_date, is_active FROM periods WHERE deleted_at IS NULL ORDER BY start_date DESC'
+  );
+  const { data: bidangsData } = useQuery(
+    'SELECT id, period_id, name, code, description FROM bidang WHERE deleted_at IS NULL'
+  );
+  const { data: unitsData } = useQuery(
+    'SELECT id, period_id, bidang_id, name, parent_id, description FROM organization_units WHERE deleted_at IS NULL'
+  );
 
-  const periodList = periods || [];
-  const bidangList = bidangs || [];
-  const unitList = units || [];
-  const localOccasions = useLiveQuery(() => db.occasions.toArray()) || [];
+  const periodList = useMemo(() => {
+    return (powerSyncPeriods || []).map((p: any) => ({
+      ...p,
+      is_active: p.is_active === 1,
+      sync_status: 'SYNCED'
+    })) as Period[];
+  }, [powerSyncPeriods]);
+  
+  const bidangList = (bidangsData || []) as Bidang[];
+  const unitList = (unitsData || []) as OrganizationUnit[];
+  const { data: occasionsData } = useQuery(
+    'SELECT id, period_id, title, date, description FROM occasions WHERE deleted_at IS NULL'
+  );
+  const localOccasions = (occasionsData || []) as Occasion[];
 
   const getPeriodDurationYears = (p: Period) => {
     const start = new Date(p.start_date);
@@ -75,10 +103,14 @@ export default function SettingsPage() {
     return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
   };
 
-  const fiscalPeriods = periodList.filter(p => getPeriodDurationYears(p) <= 2);
-  const membershipPeriods = periodList.filter(p => getPeriodDurationYears(p) > 2);
-  const activeFiscalPeriod = periodList.find(p => p.is_active && getPeriodDurationYears(p) <= 2) || fiscalPeriods[0];
-  const activeMembershipPeriod = periodList.find(p => p.is_active && getPeriodDurationYears(p) > 2) || membershipPeriods[0];
+  const { fiscalPeriods, membershipPeriods, activeFiscalPeriod, activeMembershipPeriod } = useMemo(() => {
+    const fiscal = periodList.filter(p => getPeriodDurationYears(p) <= 2);
+    const membership = periodList.filter(p => getPeriodDurationYears(p) > 2);
+    const activeFiscal = periodList.find(p => p.is_active && getPeriodDurationYears(p) <= 2) || fiscal[0];
+    const activeMembership = periodList.find(p => p.is_active && getPeriodDurationYears(p) > 2) || membership[0];
+    return { fiscalPeriods: fiscal, membershipPeriods: membership, activeFiscalPeriod: activeFiscal, activeMembershipPeriod: activeMembership };
+  }, [periodList]);
+
   const [activeTab, setActiveTab] = useState<'fiscal' | 'membership' | 'struktur' | 'appearance' | 'iam' | 'sync' | 'calendar'>('fiscal');
 
   const { theme, setTheme } = useTheme();
@@ -89,86 +121,47 @@ export default function SettingsPage() {
   const syncStatus = useAppStore(state => state.syncStatus);
   const lastSyncTime = useAppStore(state => state.lastSyncTime);
 
-  const pendingCounts = useLiveQuery(async () => {
-    const periods = await db.periods.where('sync_status').equals('PENDING').count();
-    const units = await db.organization_units.where('sync_status').equals('PENDING').count();
-    const programs = await db.programs.where('sync_status').equals('PENDING').count();
-    const typePrograms = await db.type_program.where('sync_status').equals('PENDING').count();
-    const bidangs = await db.bidang.where('sync_status').equals('PENDING').count();
-    const budgets = await db.anggaran_program.where('sync_status').equals('PENDING').count();
-    const members = await db.members.where('sync_status').equals('PENDING').count();
-    const unitMembers = await db.unit_members.where('sync_status').equals('PENDING').count();
-    const roles = await db.user_roles.where('sync_status').equals('PENDING').count();
-    const occasions = await db.occasions.where('sync_status').equals('PENDING').count();
-    const deletes = await db.deleted_records.where('sync_status').equals('PENDING').count();
-    
-    return {
-      periods,
-      units,
-      programs,
-      typePrograms,
-      bidangs,
-      budgets,
-      members,
-      unitMembers,
-      roles,
-      occasions,
-      deletes,
-      total: periods + units + programs + typePrograms + bidangs + budgets + members + unitMembers + roles + occasions + deletes
-    };
-  });
-
-  const errorRecords = useLiveQuery(async () => {
-    const periods = await db.periods.where('sync_status').equals('ERROR').toArray();
-    const units = await db.organization_units.where('sync_status').equals('ERROR').toArray();
-    const programs = await db.programs.where('sync_status').equals('ERROR').toArray();
-    const typePrograms = await db.type_program.where('sync_status').equals('ERROR').toArray();
-    const bidangs = await db.bidang.where('sync_status').equals('ERROR').toArray();
-    const budgets = await db.anggaran_program.where('sync_status').equals('ERROR').toArray();
-    const members = await db.members.where('sync_status').equals('ERROR').toArray();
-    const unitMembers = await db.unit_members.where('sync_status').equals('ERROR').toArray();
-    const roles = await db.user_roles.where('sync_status').equals('ERROR').toArray();
-    const occasions = await db.occasions.where('sync_status').equals('ERROR').toArray();
-    
-    const list: { id: string; table: string; name: string }[] = [];
-    periods.forEach(p => list.push({ id: p.id, table: 'periods', name: p.name }));
-    units.forEach(u => list.push({ id: u.id, table: 'organization_units', name: u.name }));
-    programs.forEach(p => list.push({ id: p.id, table: 'programs', name: p.name }));
-    typePrograms.forEach(t => list.push({ id: t.id, table: 'type_program', name: t.name }));
-    bidangs.forEach(b => list.push({ id: b.id, table: 'bidang', name: b.name }));
-    budgets.forEach(b => list.push({ id: b.id, table: 'anggaran_program', name: b.nama_anggaran }));
-    members.forEach(m => list.push({ id: m.id, table: 'members', name: m.name }));
-    unitMembers.forEach(um => list.push({ id: um.id, table: 'unit_members', name: um.role_title || 'Role Assignment' }));
-    roles.forEach(r => list.push({ id: r.id, table: 'user_roles', name: `Role: ${r.role}` }));
-    occasions.forEach(o => list.push({ id: o.id, table: 'occasions', name: o.title }));
-    
-    return list;
-  });
-
   const currentUser = useAppStore(state => state.user);
   const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
   const currentUserRole = useAppStore(state => state.currentUserRole);
   const canManageSettings = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN';
   const isCalendarAdmin = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN';
 
-  const userRolesList = useLiveQuery(() => db.user_roles.toArray()) || [];
-  const userProfilesList = useLiveQuery(() => db.user_profiles.toArray()) || [];
-  const membersList = useLiveQuery(() => db.members.toArray()) || [];
-
-  const myRoles = useLiveQuery(
-    () => currentUser && activeMembershipPeriod ? db.user_roles.where({ user_id: currentUser.id, period_id: activeMembershipPeriod.id }).toArray() : Promise.resolve<any[]>([]),
-    [currentUser, activeMembershipPeriod]
+  const { data: userRolesData } = useQuery(
+    'SELECT id, user_id, role, period_id FROM user_role WHERE deleted_at IS NULL'
   );
+  const { data: membersData } = useQuery(
+    'SELECT id, name, phone, email, status FROM members WHERE deleted_at IS NULL'
+  );
+
+  const userRolesList = (userRolesData || []) as any[];
+  const userProfilesList: any[] = [];
+  const membersList = (membersData || []) as any[];
+
+  const currentUserId = currentUser?.id;
+  const activeMembershipPeriodId = activeMembershipPeriod?.id;
+
+  const { data: myRolesData } = useQuery(
+    'SELECT id, user_id, role, period_id FROM user_role WHERE user_id = ? AND period_id = ? AND deleted_at IS NULL',
+    [currentUserId || '', activeMembershipPeriodId || '']
+  );
+  const myRoles = (myRolesData || []) as any[];
 
   useEffect(() => {
     if (myRoles && myRoles.length > 0) {
-      setCurrentUserRole(myRoles[0].role);
+      if (currentUserRole !== myRoles[0].role) {
+        setCurrentUserRole(myRoles[0].role);
+      }
     } else if (currentUser && (currentUser.email === 'benmanafe48@gmail.com' || currentUser.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
-      setCurrentUserRole('SYSTEM_OWNER');
+      if (currentUserRole !== 'SYSTEM_OWNER') {
+        setCurrentUserRole('SYSTEM_OWNER');
+      }
     } else {
-      setCurrentUserRole(null);
+      if (currentUserRole !== null) {
+        setCurrentUserRole(null);
+      }
     }
-  }, [myRoles, currentUser, activeMembershipPeriod, userRolesList, setCurrentUserRole]);
+  }, [myRoles, currentUser, activeMembershipPeriodId, userRolesList, setCurrentUserRole, currentUserRole]);
 
   const [showIamModal, setShowIamModal] = useState(false);
   const [iamUserEmail, setIamUserEmail] = useState("");
@@ -258,33 +251,26 @@ export default function SettingsPage() {
     const targetPeriod = activeFiscalPeriod || activeMembershipPeriod;
     if (!occasionTitle.trim() || !occasionDate || !targetPeriod) return;
     setSubmitting(true);
+    const now = new Date().toISOString();
     try {
-      if (editingOccasion) {
-        await db.occasions.update(editingOccasion.id, {
-          title: occasionTitle.trim(),
-          date: occasionDate,
-          description: occasionDesc.trim() || undefined,
-          sync_status: 'PENDING'
-        });
-      } else {
-        await db.occasions.add({
-          id: crypto.randomUUID(),
-          period_id: targetPeriod.id,
-          title: occasionTitle.trim(),
-          date: occasionDate,
-          description: occasionDesc.trim() || undefined,
-          sync_status: 'PENDING'
-        });
-      }
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (editingOccasion) {
+          await tx.execute(
+            'UPDATE occasions SET title = ?, date = ?, description = ?, updated_at = ? WHERE id = ?',
+            [occasionTitle.trim(), occasionDate, occasionDesc.trim() || null, now, editingOccasion.id]
+          );
+        } else {
+          await tx.execute(
+            'INSERT INTO occasions (id, period_id, title, date, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), targetPeriod.id, occasionTitle.trim(), occasionDate, occasionDesc.trim() || null, now, now]
+          );
+        }
+      });
       setShowOccasionModal(false);
       setEditingOccasion(null);
       setOccasionTitle("");
       setOccasionDate("");
       setOccasionDesc("");
-      if (isOnline) {
-        const { syncAll } = await import('@/lib/sync');
-        syncAll().catch(console.error);
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -295,14 +281,10 @@ export default function SettingsPage() {
   const handleDeleteOccasion = async (id: string) => {
     if (confirm("Hapus acara/kegiatan ini?")) {
       try {
-        await db.transaction('rw', [db.occasions, db.deleted_records], async () => {
-          await db.occasions.delete(id);
-          await db.deleted_records.add({ id, table_name: 'occasions', sync_status: 'PENDING' });
+        const now = new Date().toISOString();
+        await powerSyncDb.writeTransaction(async (tx) => {
+          await tx.execute('UPDATE occasions SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
         });
-        if (isOnline) {
-          const { syncAll } = await import('@/lib/sync');
-          syncAll().catch(console.error);
-        }
       } catch (err) {
         console.error(err);
       }
@@ -316,141 +298,131 @@ export default function SettingsPage() {
       const selected = periodList.find(p => p.id === periodId);
       if (!selected) return;
       const targetIsActive = !selected.is_active;
-      await db.transaction('rw', db.periods, async () => {
+      const now = new Date().toISOString();
+      await powerSyncDb.writeTransaction(async (tx) => {
         if (targetIsActive) {
           const durationType = getPeriodDurationYears(selected) <= 2 ? 'fiscal' : 'membership';
           for (const p of periodList) {
             const pType = getPeriodDurationYears(p) <= 2 ? 'fiscal' : 'membership';
             if (pType === durationType && p.id !== periodId && p.is_active) {
-              await db.periods.update(p.id, { is_active: false, sync_status: 'PENDING' });
+              await tx.execute('UPDATE periods SET is_active = 0, updated_at = ? WHERE id = ?', [now, p.id]);
             }
           }
         }
-        await db.periods.update(periodId, { is_active: targetIsActive, sync_status: 'PENDING' });
+        await tx.execute('UPDATE periods SET is_active = ?, updated_at = ? WHERE id = ?', [targetIsActive ? 1 : 0, now, periodId]);
       });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert('Gagal mengaktifkan periode. Cek console log.');
+    }
   };
 
   const handleSavePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!periodName.trim() || !startDate || !endDate) return;
     setSubmitting(true);
+    const now = new Date().toISOString();
     try {
-      if (editingPeriod) {
-        await db.periods.update(editingPeriod.id, { name: periodName.trim(), start_date: startDate, end_date: endDate, is_active: periodActive, sync_status: 'PENDING' });
-        if (periodActive) {
-          const durationType = getPeriodDurationYears(editingPeriod) <= 2 ? 'fiscal' : 'membership';
-          for (const p of periodList) {
-            if ((getPeriodDurationYears(p) <= 2 ? 'fiscal' : 'membership') === durationType && p.id !== editingPeriod.id && p.is_active) {
-              await db.periods.update(p.id, { is_active: false, sync_status: 'PENDING' });
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (editingPeriod) {
+          await tx.execute(
+            'UPDATE periods SET name = ?, start_date = ?, end_date = ?, is_active = ?, updated_at = ? WHERE id = ?',
+            [periodName.trim(), startDate, endDate, periodActive ? 1 : 0, now, editingPeriod.id]
+          );
+          if (periodActive) {
+            const durationType = getPeriodDurationYears(editingPeriod) <= 2 ? 'fiscal' : 'membership';
+            for (const p of periodList) {
+              if ((getPeriodDurationYears(p) <= 2 ? 'fiscal' : 'membership') === durationType && p.id !== editingPeriod.id && p.is_active) {
+                await tx.execute('UPDATE periods SET is_active = 0, updated_at = ? WHERE id = ?', [now, p.id]);
+              }
+            }
+          }
+        } else {
+          const periodId = crypto.randomUUID();
+          const res = await tx.execute(
+            'INSERT INTO periods (id, name, start_date, end_date, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [periodId, periodName.trim(), startDate, endDate, periodActive ? 1 : 0, now, now]
+          );
+          console.log('Insert period result:', res);
+          if (periodActive) {
+            for (const p of periodList) {
+              if ((getPeriodDurationYears(p) <= 2 ? 'fiscal' : 'membership') === periodType && p.is_active) {
+                await tx.execute('UPDATE periods SET is_active = 0, updated_at = ? WHERE id = ?', [now, p.id]);
+              }
             }
           }
         }
-      } else {
-        const periodId = crypto.randomUUID();
-        await db.periods.add({ id: periodId, name: periodName.trim(), start_date: startDate, end_date: endDate, is_active: periodActive, sync_status: 'PENDING' });
-        if (periodActive) {
-          for (const p of periodList) {
-            if ((getPeriodDurationYears(p) <= 2 ? 'fiscal' : 'membership') === periodType && p.is_active) {
-              await db.periods.update(p.id, { is_active: false, sync_status: 'PENDING' });
-            }
-          }
-        }
-      }
+      });
       setShowPeriodModal(false);
-    } catch (err) { console.error(err); } finally { setSubmitting(false); }
+      alert('Berhasil menyimpan periode (Local SQLite OK)');
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menyimpan periode. Cek console log.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDeletePeriod = async (id: string) => {
-    if (confirm("Delete this period?")) {
-      try {
-        await db.transaction('rw', [
-          db.periods,
-          db.bidang,
-          db.organization_units,
-          db.user_roles,
-          db.unit_members,
-          db.program_responsibility_pp,
-          db.occasions,
-          db.programs,
-          db.anggaran_program,
-          db.deleted_records
-        ], async () => {
-          // 1. Bidang
-          const bids = await db.bidang.where('period_id').equals(id).toArray();
-          for (const b of bids) {
-            await db.bidang.delete(b.id);
-            await db.deleted_records.add({ id: b.id, table_name: 'bidang', sync_status: 'PENDING' });
-          }
-
-          // 2. Organization Units
-          const orgs = await db.organization_units.where('period_id').equals(id).toArray();
-          for (const u of orgs) {
-            await db.organization_units.delete(u.id);
-            await db.deleted_records.add({ id: u.id, table_name: 'organization_units', sync_status: 'PENDING' });
-          }
-
-          // 3. User Roles
-          const roles = await db.user_roles.where('period_id').equals(id).toArray();
-          for (const r of roles) {
-            await db.user_roles.delete(r.id);
-            await db.deleted_records.add({ id: r.id, table_name: 'user_role', sync_status: 'PENDING' });
-          }
-
-          // 4. Unit Members
-          const ums = await db.unit_members.where('period_id').equals(id).toArray();
-          for (const um of ums) {
-            await db.unit_members.delete(um.id);
-            await db.deleted_records.add({ id: um.id, table_name: 'unit_members', sync_status: 'PENDING' });
-          }
-
-          // 5. Program Responsibility PP
-          const pps = await db.program_responsibility_pp.where('period_id').equals(id).toArray();
-          for (const pp of pps) {
-            await db.program_responsibility_pp.delete(pp.id);
-            await db.deleted_records.add({ id: pp.id, table_name: 'program_responsibility_pp', sync_status: 'PENDING' });
-          }
-
-          // 6. Occasions
-          const occs = await db.occasions.where('period_id').equals(id).toArray();
-          for (const o of occs) {
-            await db.occasions.delete(o.id);
-            await db.deleted_records.add({ id: o.id, table_name: 'occasions', sync_status: 'PENDING' });
-          }
-
-          // 7. Programs & Anggaran Program
-          const progs = await db.programs.where('period_id').equals(id).toArray();
-          for (const pr of progs) {
-            // Delete associated budgets
-            const budgets = await db.anggaran_program.where('program_id').equals(pr.id).toArray();
-            for (const b of budgets) {
-              await db.anggaran_program.delete(b.id);
-              await db.deleted_records.add({ id: b.id, table_name: 'anggaran_program', sync_status: 'PENDING' });
-            }
-            await db.programs.delete(pr.id);
-            await db.deleted_records.add({ id: pr.id, table_name: 'programs', sync_status: 'PENDING' });
-          }
-
-          // 8. Finally delete period
-          await db.periods.delete(id);
-          await db.deleted_records.add({ id, table_name: 'periods', sync_status: 'PENDING' });
-        });
-      } catch (e) {
-        console.error('Delete period failed:', e);
+    console.log('--- handleDeletePeriod Triggered for ID:', id, '---');
+    try {
+      console.log('1. Checking journals for period...', id);
+      const journals = await powerSyncDb.getAll("SELECT id FROM journals WHERE period_id = ? AND (deleted_at IS NULL OR deleted_at = '') LIMIT 1", [id]);
+      console.log('Journals found:', journals.length);
+      if (journals.length > 0) {
+        alert("Tidak dapat menghapus periode: Terdapat data Jurnal Keuangan yang terkait.");
+        return;
       }
+      
+      console.log('2. Checking programs for period...', id);
+      const programs = await powerSyncDb.getAll("SELECT id FROM programs WHERE period_id = ? AND (deleted_at IS NULL OR deleted_at = '') LIMIT 1", [id]);
+      console.log('Programs found:', programs.length);
+      if (programs.length > 0) {
+        alert("Tidak dapat menghapus periode: Terdapat data Program yang terkait.");
+        return;
+      }
+
+      console.log('3. Starting writeTransaction...');
+      const now = new Date().toISOString();
+      let rowsUpdated = 0;
+      await powerSyncDb.writeTransaction(async (tx) => {
+        console.log('4. Inside writeTransaction, executing UPDATE...');
+        const res = await tx.execute('UPDATE periods SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+        rowsUpdated = res.rowsAffected;
+        console.log('5. Update result:', res);
+      });
+      
+      console.log('6. rowsUpdated:', rowsUpdated);
+      if (rowsUpdated === 0) {
+        alert('ERROR: Tidak ada data periode yang terhapus di database lokal (ID tidak ditemukan)!');
+      } else {
+        alert('Berhasil menghapus periode secara lokal.');
+      }
+    } catch (e) {
+      console.error('Delete period failed with exception:', e);
+      alert('Gagal menghapus periode. Cek console log.');
     }
   };
 
   const handleSaveBidang = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bidangName.trim() || !activeMembershipPeriod) return;
+    if (!bidangName.trim() || !activeMembershipPeriodId) return;
     setSubmitting(true);
+    const now = new Date().toISOString();
     try {
-      if (editingBidang) {
-        await db.bidang.update(editingBidang.id, { name: bidangName.trim(), code: bidangCode.trim().toUpperCase(), description: bidangDesc.trim() || undefined, sync_status: 'PENDING' });
-      } else {
-        await db.bidang.add({ id: crypto.randomUUID(), period_id: activeMembershipPeriod.id, name: bidangName.trim(), code: bidangCode.trim().toUpperCase(), description: bidangDesc.trim() || undefined, sync_status: 'PENDING' });
-      }
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (editingBidang) {
+          await tx.execute(
+            'UPDATE bidang SET name = ?, code = ?, description = ?, updated_at = ? WHERE id = ?',
+            [bidangName.trim(), bidangCode.trim().toUpperCase(), bidangDesc.trim() || null, now, editingBidang.id]
+          );
+        } else {
+          await tx.execute(
+            'INSERT INTO bidang (id, period_id, name, code, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), activeMembershipPeriodId, bidangName.trim(), bidangCode.trim().toUpperCase(), bidangDesc.trim() || null, now, now]
+          );
+        }
+      });
       setShowBidangModal(false);
     } catch (err) { console.error(err); } finally { setSubmitting(false); }
   };
@@ -458,14 +430,10 @@ export default function SettingsPage() {
   const handleDeleteBidang = async (id: string) => {
     if (confirm("Delete this Bidang and all its linked units?")) {
       try {
-        await db.transaction('rw', [db.bidang, db.organization_units, db.deleted_records], async () => {
-          const linkedUnits = unitList.filter(u => u.bidang_id === id);
-          for (const u of linkedUnits) {
-            await db.organization_units.delete(u.id);
-            await db.deleted_records.add({ id: u.id, table_name: 'organization_units', sync_status: 'PENDING' });
-          }
-          await db.bidang.delete(id);
-          await db.deleted_records.add({ id, table_name: 'bidang', sync_status: 'PENDING' });
+        const now = new Date().toISOString();
+        await powerSyncDb.writeTransaction(async (tx) => {
+          await tx.execute('UPDATE bidang SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+          await tx.execute('UPDATE organization_units SET deleted_at = ?, updated_at = ? WHERE bidang_id = ?', [now, now, id]);
         });
       } catch (e) { console.error(e); }
     }
@@ -473,41 +441,33 @@ export default function SettingsPage() {
 
   const handleSaveUnit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!unitName.trim() || !activeMembershipPeriod) return;
+    if (!unitName.trim() || !activeMembershipPeriodId) return;
     setSubmitting(true);
+    const now = new Date().toISOString();
     try {
-      if (editingUnit) {
-        await db.organization_units.update(editingUnit.id, { 
-          name: unitName.trim(), 
-          description: unitDesc.trim() || undefined,
-          sync_status: 'PENDING' 
-        });
-      } else {
-        await db.organization_units.add({
-          id: crypto.randomUUID(),
-          period_id: activeMembershipPeriod.id,
-          name: unitName.trim(),
-          bidang_id: unitBidangId || undefined,
-          parent_id: unitParentId,
-          description: unitDesc.trim() || undefined,
-          sync_status: 'PENDING'
-        });
-      }
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (editingUnit) {
+          await tx.execute(
+            'UPDATE organization_units SET name = ?, description = ?, updated_at = ? WHERE id = ?',
+            [unitName.trim(), unitDesc.trim() || null, now, editingUnit.id]
+          );
+        } else {
+          await tx.execute(
+            'INSERT INTO organization_units (id, period_id, name, bidang_id, parent_id, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), activeMembershipPeriodId, unitName.trim(), unitBidangId || null, unitParentId || null, unitDesc.trim() || null, now, now]
+          );
+        }
+      });
       setShowUnitModal(false);
     } catch (err) { console.error(err); } finally { setSubmitting(false); }
   };
 
   const handleDeleteUnit = async (id: string) => {
-    if (confirm("Delete this unit? All child units will also be deleted.")) {
+    if (confirm("Delete this unit?")) {
       try {
-        await db.transaction('rw', [db.organization_units, db.deleted_records], async () => {
-          const children = unitList.filter(u => u.parent_id === id);
-          for (const child of children) {
-            await db.organization_units.delete(child.id);
-            await db.deleted_records.add({ id: child.id, table_name: 'organization_units', sync_status: 'PENDING' });
-          }
-          await db.organization_units.delete(id);
-          await db.deleted_records.add({ id, table_name: 'organization_units', sync_status: 'PENDING' });
+        const now = new Date().toISOString();
+        await powerSyncDb.writeTransaction(async (tx) => {
+          await tx.execute('UPDATE organization_units SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
         });
       } catch (e) { console.error(e); }
     }
@@ -515,39 +475,41 @@ export default function SettingsPage() {
 
   const getRoleUserEmail = (userId: string) => {
     const profile = userProfilesList.find(p => p.id === userId);
-    return profile?.email || userId;
+    if (profile?.email) return profile.email;
+    const member = membersList.find(m => m.id === userId);
+    return member?.email || userId;
   };
 
   const handleSaveUserRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeMembershipPeriod || !iamUserEmail.trim() || !iamRole) return;
+    if (!activeMembershipPeriodId || !iamUserEmail.trim() || !iamRole) return;
     setSubmitting(true);
+    const now = new Date().toISOString();
     try {
       let targetUserId = "";
-      const found = userProfilesList.find(p => p.email.toLowerCase() === iamUserEmail.trim().toLowerCase());
-      if (found) {
-        targetUserId = found.id;
-      } else {
-        // Fallback: Check if this email was already assigned a role previously in any period
-        const existingRole = userRolesList.find(ur => {
-          const email = getRoleUserEmail(ur.user_id);
-          return email.toLowerCase() === iamUserEmail.trim().toLowerCase();
-        });
-        if (existingRole) {
-          targetUserId = existingRole.user_id;
+      const emailLower = iamUserEmail.trim().toLowerCase();
+      const found = userProfilesList.find(p => p.email.toLowerCase() === emailLower);
+      
+      await powerSyncDb.writeTransaction(async (tx) => {
+        if (found) {
+          targetUserId = found.id;
         } else {
-          const memberFound = membersList.find(m => m.email?.toLowerCase() === iamUserEmail.trim().toLowerCase());
-          targetUserId = memberFound?.id || crypto.randomUUID();
-          await db.user_profiles.put({ id: targetUserId, email: iamUserEmail.trim().toLowerCase(), sync_status: 'PENDING' });
+          const existingRole = userRolesList.find(ur => {
+            const email = getRoleUserEmail(ur.user_id);
+            return email.toLowerCase() === emailLower;
+          });
+          if (existingRole) {
+            targetUserId = existingRole.user_id;
+          } else {
+            const memberFound = membersList.find(m => m.email?.toLowerCase() === emailLower);
+            targetUserId = memberFound?.id || crypto.randomUUID();
+          }
         }
-      }
 
-      await db.user_roles.add({
-        id: crypto.randomUUID(),
-        user_id: targetUserId,
-        role: iamRole,
-        period_id: activeMembershipPeriod.id,
-        sync_status: 'PENDING'
+        await tx.execute(
+          'INSERT INTO user_roles (id, user_id, role, period_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [crypto.randomUUID(), targetUserId, iamRole, activeMembershipPeriodId, now, now]
+        );
       });
       setShowIamModal(false);
       setIamUserEmail("");
@@ -561,9 +523,9 @@ export default function SettingsPage() {
   const handleDeleteUserRole = async (id: string) => {
     if (confirm("Hapus hak akses ini?")) {
       try {
-        await db.transaction('rw', [db.user_roles, db.deleted_records], async () => {
-          await db.user_roles.delete(id);
-          await db.deleted_records.add({ id, table_name: 'user_role', sync_status: 'PENDING' });
+        const now = new Date().toISOString();
+        await powerSyncDb.writeTransaction(async (tx) => {
+          await tx.execute('UPDATE user_roles SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
         });
       } catch (e) {
         console.error(e);
@@ -572,10 +534,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 pb-24 max-w-4xl mx-auto">
+    <div className="py-6 pb-24 max-w-4xl mx-auto">
       <header className="mb-8 pt-4">
-        <h1 className="text-3xl font-bold flex items-center gap-2"><Settings className="text-primary-600 animate-spin-slow" size={32} /> Global Settings</h1>
-        <p className="text-slate-500 text-sm mt-1">Configure organizational assets, fiscal years, and unified hierarchy.</p>
+        <h1 className="text-3xl font-bold flex items-center gap-2 text-text-high"><Settings className="text-accent-valor animate-spin-slow" size={32} /> Global Settings</h1>
+        <p className="text-text-muted text-sm mt-1">Configure organizational assets, fiscal years, and unified hierarchy.</p>
       </header>
 
       {!activeFiscalPeriod && activeTab === 'fiscal' && (
@@ -597,14 +559,14 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <nav className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl mb-8 overflow-x-auto">
-        <button onClick={() => setActiveTab('fiscal')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'fiscal' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Tahun Anggaran</button>
-        <button onClick={() => setActiveTab('membership')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'membership' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Keanggotaan (5 Thn)</button>
-        <button onClick={() => setActiveTab('struktur')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'struktur' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Struktur Organisasi</button>
-        <button onClick={() => setActiveTab('iam')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'iam' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Hak Akses (IAM)</button>
-        <button onClick={() => setActiveTab('sync')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'sync' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Sinkronisasi</button>
-        <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'calendar' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Kalender</button>
-        <button onClick={() => setActiveTab('appearance')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'appearance' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Tampilan</button>
+      <nav className="flex gap-2 p-1 bg-surface-elevated border border-border-subtle rounded-2xl mb-8 overflow-x-auto shrink-0 shadow-[var(--shadow-soft)]">
+        <button onClick={() => setActiveTab('fiscal')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'fiscal' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Tahun Anggaran</button>
+        <button onClick={() => setActiveTab('membership')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'membership' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Keanggotaan (5 Thn)</button>
+        <button onClick={() => setActiveTab('struktur')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'struktur' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Struktur Organisasi</button>
+        <button onClick={() => setActiveTab('iam')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'iam' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Hak Akses (IAM)</button>
+        <button onClick={() => setActiveTab('sync')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'sync' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Sinkronisasi</button>
+        <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'calendar' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Kalender</button>
+        <button onClick={() => setActiveTab('appearance')} className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${activeTab === 'appearance' ? 'bg-surface-base border border-border-subtle shadow-sm text-text-high' : 'text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30'}`}>Tampilan</button>
       </nav>
 
       <section className="space-y-6">
@@ -628,7 +590,7 @@ export default function SettingsPage() {
                     <div>
                       <h3 className="font-semibold text-lg flex items-center gap-2 flex-wrap">
                         {p.name} {p.is_active && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">ACTIVE</span>}
-                        <SyncBadge status={p.sync_status} />
+                        <SyncBadge status="SYNCED" />
                       </h3>
                       <p className="text-xs text-slate-500 mt-1">Durasi: {formatDate(p.start_date)} - {formatDate(p.end_date)}</p>
                     </div>
@@ -667,7 +629,7 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="font-semibold text-lg flex items-center gap-2 flex-wrap">
                       {p.name} {p.is_active && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">ACTIVE</span>}
-                      <SyncBadge status={p.sync_status} />
+                      <SyncBadge status="SYNCED" />
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">Durasi: {formatDate(p.start_date)} - {formatDate(p.end_date)}</p>
                   </div>
@@ -711,7 +673,7 @@ export default function SettingsPage() {
                         <div>
                           <h3 className="font-semibold text-lg flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-xs px-2 py-0.5 bg-primary-50 text-primary-600 border border-primary-200 rounded font-bold">{b.code}</span>
-                            {b.name} <SyncBadge status={b.sync_status} />
+                            {b.name} <SyncBadge status="SYNCED" />
                           </h3>
                         </div>
                         <div className="flex items-center gap-1">
@@ -735,7 +697,7 @@ export default function SettingsPage() {
                                 <div className="flex items-center gap-2">
                                   <Building2 size={14} className="text-slate-400" />
                                   <span className="font-semibold text-slate-800 dark:text-slate-200">{unit.name}</span>
-                                  <SyncBadge status={unit.sync_status} />
+                                  <SyncBadge status="SYNCED" />
                                 </div>
                                 <div className="flex items-center gap-1">
                                   {canManageSettings && (
@@ -753,7 +715,7 @@ export default function SettingsPage() {
                                   <div className="flex items-center gap-2">
                                     <ChevronRight size={14} className="text-slate-400" />
                                     <span className="text-sm text-slate-600 dark:text-slate-300">{child.name}</span>
-                                    <SyncBadge status={child.sync_status} />
+                                    <SyncBadge status="SYNCED" />
                                   </div>
                                   <div className="flex items-center gap-1">
                                     {canManageSettings && (
@@ -792,52 +754,61 @@ export default function SettingsPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               {/* Light Mode Card */}
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.15, ease: easings.smooth }}
                 onClick={() => setTheme('light')} 
-                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all active:scale-[0.97] outline-none ${
+                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'light' 
-                    ? 'bg-white dark:bg-slate-700 border-primary-500 shadow-lg shadow-primary-500/5 ring-2 ring-primary-500/10' 
-                    : 'bg-surface border-border hover:border-slate-300 dark:hover:border-slate-700'
+                    ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 
+                    : 'bg-surface-base border-border-subtle hover:border-border-strong hover:bg-surface-elevated/40'
                 }`}
               >
-                <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/20 text-amber-600 rounded-full flex items-center justify-center mb-4 font-bold">
+                <div className="w-10 h-10 bg-[oklch(0.96_0.02_90)] dark:bg-[oklch(0.25_0.02_90)] text-[oklch(0.6_0.15_90)] rounded-full flex items-center justify-center mb-4 font-bold">
                   <Sun size={20} />
                 </div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-200">Mode Terang</h3>
-                <p className="text-xs text-slate-500 mt-1">Menggunakan latar belakang terang untuk kecerahan optimal di siang hari.</p>
-              </button>
+                <h3 className="font-bold text-text-high">Mode Terang</h3>
+                <p className="text-xs text-text-muted mt-1">Menggunakan latar belakang terang untuk kecerahan optimal di siang hari.</p>
+              </motion.button>
 
               {/* Dark Mode Card */}
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.15, ease: easings.smooth }}
                 onClick={() => setTheme('dark')} 
-                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all active:scale-[0.97] outline-none ${
+                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'dark' 
-                    ? 'bg-white dark:bg-slate-700 border-primary-500 shadow-lg shadow-primary-500/5 ring-2 ring-primary-500/10' 
-                    : 'bg-surface border-border hover:border-slate-300 dark:hover:border-slate-700'
+                    ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 
+                    : 'bg-surface-base border-border-subtle hover:border-border-strong hover:bg-surface-elevated/40'
                 }`}
               >
-                <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mb-4 font-bold">
+                <div className="w-10 h-10 bg-[oklch(0.96_0.02_260)] dark:bg-[oklch(0.25_0.02_260)] text-[oklch(0.6_0.15_260)] rounded-full flex items-center justify-center mb-4 font-bold">
                   <Moon size={20} />
                 </div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-200">Mode Gelap</h3>
-                <p className="text-xs text-slate-500 mt-1">Latar belakang hitam obsidian yang nyaman untuk mata dan hemat baterai OLED.</p>
-              </button>
+                <h3 className="font-bold text-text-high">Mode Gelap</h3>
+                <p className="text-xs text-text-muted mt-1">Latar belakang hitam obsidian yang nyaman untuk mata dan hemat baterai OLED.</p>
+              </motion.button>
 
               {/* System Preference Card */}
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.15, ease: easings.smooth }}
                 onClick={() => setTheme('system')} 
-                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all active:scale-[0.97] outline-none ${
+                className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'system' 
-                    ? 'bg-white dark:bg-slate-700 border-primary-500 shadow-lg shadow-primary-500/5 ring-2 ring-primary-500/10' 
-                    : 'bg-surface border-border hover:border-slate-300 dark:hover:border-slate-700'
+                    ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 
+                    : 'bg-surface-base border-border-subtle hover:border-border-strong hover:bg-surface-elevated/40'
                 }`}
               >
-                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center mb-4 font-bold">
+                <div className="w-10 h-10 bg-surface-elevated border border-border-subtle text-text-muted rounded-full flex items-center justify-center mb-4 font-bold">
                   <Monitor size={20} />
                 </div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-200">Ikuti Sistem</h3>
-                <p className="text-xs text-slate-500 mt-1">Menyelaraskan tema secara otomatis berdasarkan pengaturan perangkat Anda.</p>
-              </button>
+                <h3 className="font-bold text-text-high">Ikuti Sistem</h3>
+                <p className="text-xs text-text-muted mt-1">Menyelaraskan tema secara otomatis berdasarkan pengaturan perangkat Anda.</p>
+              </motion.button>
             </div>
           </div>
         )}
@@ -916,7 +887,7 @@ export default function SettingsPage() {
               <RefreshCw className="text-primary-500" size={24} /> Pusat Sinkronisasi Data
             </h2>
             <p className="text-slate-500 text-sm">
-              Kelola sinkronisasi data lokal (IndexedDB) dengan server database cloud (Supabase) secara offline-first.
+              Kelola sinkronisasi data lokal (SQLite) dengan server database cloud (Supabase) secara offline-first.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -948,109 +919,29 @@ export default function SettingsPage() {
               </div>
 
               {/* Status Sinkronisasi */}
-              <div className="bg-surface border border-border p-6 rounded-3xl shadow-sm flex flex-col justify-between">
+              <div className="bg-surface-elevated border border-border-subtle p-6 rounded-3xl shadow-[var(--shadow-soft)] flex flex-col justify-between">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">Status Sinkronisasi</h3>
-                    <p className="text-xs text-slate-500 mt-1">Riwayat sinkronisasi terakhir dengan cloud.</p>
+                    <h3 className="font-bold text-lg text-text-high">Status Sinkronisasi</h3>
+                    <p className="text-xs text-text-muted mt-1">Riwayat sinkronisasi terakhir dengan cloud.</p>
                   </div>
                   <div className={`px-3 py-1 rounded-full border text-xs font-semibold uppercase ${
                     syncStatus === 'syncing' ? 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-950/25 dark:border-blue-950/50' :
                     syncStatus === 'success' ? 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/25 dark:border-emerald-950/50' :
                     syncStatus === 'error' ? 'text-red-600 bg-red-50 border-red-200 dark:bg-red-950/25 dark:border-red-950/50' :
-                    'text-slate-600 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+                    'text-text-muted bg-surface-base border-border-subtle'
                   }`}>
                     {syncStatus}
                   </div>
                 </div>
 
-                <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1 mb-6">
-                  <p>Sinkronisasi Terakhir: <span className="font-bold text-slate-800 dark:text-slate-200">
+                <div className="text-sm text-text-muted space-y-1 mt-6">
+                  <p>Sinkronisasi Terakhir: <span className="font-bold text-text-high">
                     {lastSyncTime ? new Date(lastSyncTime).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Belum pernah'}
                   </span></p>
                 </div>
-
-                <button
-                  disabled={!isOnline || syncStatus === 'syncing'}
-                  onClick={async () => {
-                    const { syncAll } = await import('@/lib/sync');
-                    await syncAll();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-100 dark:disabled:bg-slate-800/80 disabled:text-slate-400 text-white rounded-2xl py-3 font-semibold transition-all shadow-md shadow-primary-500/10 active:scale-[0.98]"
-                >
-                  <RefreshCw size={18} className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
-                  {syncStatus === 'syncing' ? 'Mensinkronkan...' : 'Sinkronkan Sekarang'}
-                </button>
               </div>
             </div>
-
-            {/* Antrean Perubahan Lokal */}
-            <div className="bg-surface border border-border rounded-3xl p-6 shadow-sm">
-              <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-                <Database size={18} className="text-primary-500" /> Antrean Data Lokal (Unsynced)
-              </h3>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border text-center">
-                  <span className="text-xs text-slate-400 block uppercase">Program</span>
-                  <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{(pendingCounts?.programs || 0) + (pendingCounts?.budgets || 0)}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border text-center">
-                  <span className="text-xs text-slate-400 block uppercase">Struktur</span>
-                  <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{(pendingCounts?.units || 0) + (pendingCounts?.bidangs || 0) + (pendingCounts?.periods || 0)}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border text-center">
-                  <span className="text-xs text-slate-400 block uppercase">Anggota / Akses</span>
-                  <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{(pendingCounts?.members || 0) + (pendingCounts?.unitMembers || 0) + (pendingCounts?.roles || 0)}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-border text-center">
-                  <span className="text-xs text-slate-400 block uppercase">Penghapusan</span>
-                  <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{pendingCounts?.deletes || 0}</span>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-dashed border-border flex justify-between items-center text-sm">
-                <span className="text-slate-500">Total data belum disinkronkan:</span>
-                <span className={`font-bold px-3 py-1 rounded-full text-xs ${
-                  (pendingCounts?.total || 0) > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
-                }`}>
-                  {pendingCounts?.total || 0} data pending
-                </span>
-              </div>
-            </div>
-
-            {/* Pemecahan Masalah Error Sync */}
-            {errorRecords && errorRecords.length > 0 && (
-              <div className="bg-red-500/5 border border-red-200 dark:border-red-950 rounded-3xl p-6 shadow-sm">
-                <h3 className="font-bold text-lg text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
-                  <AlertCircle size={18} /> Baris Data Error Gagal Sinkronisasi
-                </h3>
-                <p className="text-xs text-red-600/80 dark:text-red-500/80 mb-4">
-                  Beberapa data lokal mengalami kegagalan saat diunggah ke server cloud (misalnya akibat pelanggaran aturan validasi database).
-                </p>
-                <div className="divide-y divide-red-200/50 dark:divide-red-950/50">
-                  {errorRecords.map((rec, i) => (
-                    <div key={i} className="py-3 flex justify-between items-center text-sm">
-                      <div>
-                        <span className="font-mono text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/50 px-1.5 py-0.5 rounded mr-2 uppercase">{rec.table}</span>
-                        <span className="font-medium text-slate-800 dark:text-slate-200">{rec.name}</span>
-                      </div>
-                      <button 
-                        onClick={async () => {
-                          if (confirm('Atur status data ini kembali ke PENDING untuk mencoba sinkronisasi ulang?')) {
-                            // Reset sync_status to PENDING
-                            await (db as any)[rec.table].update(rec.id, { sync_status: 'PENDING' });
-                          }
-                        }}
-                        className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-white dark:bg-slate-900 border border-slate-200 px-3 py-1 rounded-lg shadow-sm"
-                      >
-                        Coba Lagi
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1091,7 +982,7 @@ export default function SettingsPage() {
               date: o.date,
               title: o.title,
               description: o.description,
-              sync_status: o.sync_status,
+              sync_status: 'SYNCED',
               original: o
             }))
           ].sort((a, b) => a.date.localeCompare(b.date));
@@ -1340,155 +1231,235 @@ export default function SettingsPage() {
         })()}
       </section>
 
-      {/* Modals for Period, Bidang, Unit omitted for brevity in this snapshot, but they act standardly */}
-      {showPeriodModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-border rounded-3xl p-6 w-full max-w-md relative shadow-2xl">
-            <button onClick={() => setShowPeriodModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">{editingPeriod ? "Edit Periode" : "Tambah Periode"}</h2>
-            <form onSubmit={handleSavePeriod} className="space-y-4">
-              <input required value={periodName} onChange={e=>setPeriodName(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Nama Periode"/>
-              <input type="date" required value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"/>
-              <input type="date" required value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"/>
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 font-medium cursor-pointer"><input type="checkbox" checked={periodActive} onChange={e=>setPeriodActive(e.target.checked)}/> Set as Active</label>
-              <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10">Simpan Data</button>
-            </form>
+      {/* Modals for Period, Bidang, Unit, IAM, and Occasion */}
+      <AnimatePresence>
+        {showPeriodModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowPeriodModal(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 w-full max-w-md relative shadow-2xl z-10"
+            >
+              <button onClick={() => setShowPeriodModal(false)} className="absolute top-4 right-4 text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30"><X size={20}/></button>
+              <h2 className="text-xl font-bold mb-6 text-text-high">{editingPeriod ? "Edit Periode" : "Tambah Periode"}</h2>
+              <form onSubmit={handleSavePeriod} className="space-y-4">
+                <input required value={periodName} onChange={e=>setPeriodName(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" placeholder="Nama Periode"/>
+                <input type="date" required value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high"/>
+                <input type="date" required value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high"/>
+                <label className="flex items-center gap-2 text-sm text-text-high font-medium cursor-pointer"><input type="checkbox" checked={periodActive} onChange={e=>setPeriodActive(e.target.checked)} className="rounded border-border-subtle text-accent-valor focus:ring-accent-valor"/> Set as Active</label>
+                <button type="submit" className="w-full py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg">Simpan Data</button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {showBidangModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-border rounded-3xl p-6 w-full max-w-md relative shadow-2xl">
-            <button onClick={() => setShowBidangModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">{editingBidang ? "Edit Bidang" : "Tambah Bidang"}</h2>
-            <form onSubmit={handleSaveBidang} className="space-y-4">
-              <input required value={bidangCode} onChange={e=>setBidangCode(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Kode (e.g. BD-1)"/>
-              <input required value={bidangName} onChange={e=>setBidangName(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Nama Bidang"/>
-              <textarea value={bidangDesc} onChange={e=>setBidangDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium h-24 resize-none" placeholder="Deskripsi Bidang (e.g. Bidang II Pelayanan dan Kesaksian)"/>
-              <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10">Simpan Data</button>
-            </form>
+      <AnimatePresence>
+        {showBidangModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowBidangModal(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 w-full max-w-md relative shadow-2xl z-10"
+            >
+              <button onClick={() => setShowBidangModal(false)} className="absolute top-4 right-4 text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30"><X size={20}/></button>
+              <h2 className="text-xl font-bold mb-6 text-text-high">{editingBidang ? "Edit Bidang" : "Tambah Bidang"}</h2>
+              <form onSubmit={handleSaveBidang} className="space-y-4">
+                <input required value={bidangCode} onChange={e=>setBidangCode(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" placeholder="Kode (e.g. BD-1)"/>
+                <input required value={bidangName} onChange={e=>setBidangName(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" placeholder="Nama Bidang"/>
+                <textarea value={bidangDesc} onChange={e=>setBidangDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium h-24 resize-none text-text-high" placeholder="Deskripsi Bidang (e.g. Bidang II Pelayanan dan Kesaksian)"/>
+                <button type="submit" className="w-full py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg">Simpan Data</button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {showUnitModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-border rounded-3xl p-6 w-full max-w-md relative shadow-2xl">
-            <button onClick={() => setShowUnitModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">{editingUnit ? "Edit Unit" : "Tambah Unit"}</h2>
-            <form onSubmit={handleSaveUnit} className="space-y-4">
-              <input required value={unitName} onChange={e=>setUnitName(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" placeholder="Nama Unit"/>
-              <textarea value={unitDesc} onChange={e=>setUnitDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium h-24 resize-none" placeholder="Deskripsi Unit (Opsional)"/>
-              <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10">Simpan Data</button>
-            </form>
+      <AnimatePresence>
+        {showUnitModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowUnitModal(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 w-full max-w-md relative shadow-2xl z-10"
+            >
+              <button onClick={() => setShowUnitModal(false)} className="absolute top-4 right-4 text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30"><X size={20}/></button>
+              <h2 className="text-xl font-bold mb-6 text-text-high">{editingUnit ? "Edit Unit" : "Tambah Unit"}</h2>
+              <form onSubmit={handleSaveUnit} className="space-y-4">
+                <input required value={unitName} onChange={e=>setUnitName(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" placeholder="Nama Unit"/>
+                <textarea value={unitDesc} onChange={e=>setUnitDesc(e.target.value)} className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium h-24 resize-none text-text-high" placeholder="Deskripsi Unit (Opsional)"/>
+                <button type="submit" className="w-full py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg">Simpan Data</button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {showIamModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl p-6 w-full max-w-md relative shadow-2xl transition-all">
-            <button onClick={() => setShowIamModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">Tambah Hak Akses</h2>
-            <form onSubmit={handleSaveUserRole} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Email Pengguna</label>
-                <input 
-                  type="email" 
-                  list="members-emails" 
-                  required 
-                  value={iamUserEmail} 
-                  onChange={e=>setIamUserEmail(e.target.value)} 
-                  className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" 
-                  placeholder="nama@email.com"
-                />
-                <datalist id="members-emails">
-                  {membersList.filter(m => m.email).map(m => (
-                    <option key={m.id} value={m.email}>{m.name} ({m.email})</option>
-                  ))}
-                </datalist>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Peran Sistem</label>
-                <select 
-                  value={iamRole} 
-                  onChange={e=>setIamRole(e.target.value as any)} 
-                  className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
+      <AnimatePresence>
+        {showIamModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => setShowIamModal(false)}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 w-full max-w-md relative shadow-2xl z-10"
+            >
+              <button onClick={() => setShowIamModal(false)} className="absolute top-4 right-4 text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30"><X size={20}/></button>
+              <h2 className="text-xl font-bold mb-6 text-text-high">Tambah Hak Akses</h2>
+              <form onSubmit={handleSaveUserRole} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Email Pengguna</label>
+                  <input 
+                    type="email" 
+                    list="members-emails" 
+                    required 
+                    value={iamUserEmail} 
+                    onChange={e=>setIamUserEmail(e.target.value)} 
+                    className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" 
+                    placeholder="nama@email.com"
+                  />
+                  <datalist id="members-emails">
+                    {membersList.filter(m => m.email).map(m => (
+                      <option key={m.id} value={m.email}>{m.name} ({m.email})</option>
+                    ))}
+                  </datalist>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Peran Sistem</label>
+                  <select 
+                    value={iamRole} 
+                    onChange={e=>setIamRole(e.target.value as any)} 
+                    className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high"
+                  >
+                    <option value="USER">USER (Akses Baca / Terbatas)</option>
+                    <option value="STAFF">STAFF (Pengelola Kegiatan / Program)</option>
+                    <option value="BENDAHARA">BENDAHARA (Pengelola Keuangan / Anggaran)</option>
+                    <option value="AUDITOR">AUDITOR (Penilai Program & Anggaran)</option>
+                    <option value="ADMIN">ADMIN (Pengelola Struktur & Pengaturan)</option>
+                    <option value="SUPER_ADMIN">SUPER_ADMIN (Akses Penuh)</option>
+                    <option value="SYSTEM_OWNER">SYSTEM_OWNER (Pemilik Sistem)</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="w-full py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] disabled:opacity-50 rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg flex items-center justify-center gap-2"
                 >
-                  <option value="USER">USER (Akses Baca / Terbatas)</option>
-                  <option value="STAFF">STAFF (Pengelola Kegiatan / Program)</option>
-                  <option value="BENDAHARA">BENDAHARA (Pengelola Keuangan / Anggaran)</option>
-                  <option value="AUDITOR">AUDITOR (Penilai Program & Anggaran)</option>
-                  <option value="ADMIN">ADMIN (Pengelola Struktur & Pengaturan)</option>
-                  <option value="SUPER_ADMIN">SUPER_ADMIN (Akses Penuh)</option>
-                  <option value="SYSTEM_OWNER">SYSTEM_OWNER (Pemilik Sistem)</option>
-                </select>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={submitting}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10 flex items-center justify-center gap-2"
-              >
-                {submitting ? 'Menyimpan...' : 'Simpan Data'}
-              </button>
-            </form>
+                  {submitting ? 'Menyimpan...' : 'Simpan Data'}
+                </button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {showOccasionModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-surface border border-border rounded-3xl p-6 w-full max-w-md relative shadow-2xl transition-all animate-scale-up">
-            <button onClick={() => { setShowOccasionModal(false); setEditingOccasion(null); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={20}/></button>
-            <h2 className="text-xl font-bold mb-6">{editingOccasion ? "Edit Acara" : "Tambah Acara"}</h2>
-            <form onSubmit={handleSaveOccasion} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nama Acara / Kegiatan</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={occasionTitle} 
-                  onChange={e => setOccasionTitle(e.target.value)} 
-                  className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium" 
-                  placeholder="Contoh: Rapat Majelis Jemaat"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tanggal Acara</label>
-                <input 
-                  type="date" 
-                  required 
-                  value={occasionDate} 
-                  onChange={e => setOccasionDate(e.target.value)} 
-                  className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium"
-                />
-              </div>
+      <AnimatePresence>
+        {showOccasionModal && (
+          <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: easings.smooth }}
+              onClick={() => { setShowOccasionModal(false); setEditingOccasion(null); }}
+              className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: easings.spring }}
+              className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 w-full max-w-md relative shadow-2xl z-10"
+            >
+              <button onClick={() => { setShowOccasionModal(false); setEditingOccasion(null); }} className="absolute top-4 right-4 text-text-muted hover:text-text-high hover:bg-surface-base/60 dark:hover:bg-surface-base/30 dark:hover:text-slate-200"><X size={20}/></button>
+              <h2 className="text-xl font-bold mb-6 text-text-high">{editingOccasion ? "Edit Acara" : "Tambah Acara"}</h2>
+              <form onSubmit={handleSaveOccasion} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Nama Acara / Kegiatan</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={occasionTitle} 
+                    onChange={e => setOccasionTitle(e.target.value)} 
+                    className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high" 
+                    placeholder="Contoh: Rapat Majelis Jemaat"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Tanggal Acara</label>
+                  <input 
+                    type="date" 
+                    required 
+                    value={occasionDate} 
+                    onChange={e => setOccasionDate(e.target.value)} 
+                    className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium text-text-high"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Deskripsi / Catatan (Opsional)</label>
-                <textarea 
-                  value={occasionDesc} 
-                  onChange={e => setOccasionDesc(e.target.value)} 
-                  className="w-full px-4 py-2.5 border border-border rounded-2xl bg-background focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm font-medium h-24 resize-none" 
-                  placeholder="Keterangan singkat mengenai acara..."
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-1.5">Deskripsi / Catatan (Opsional)</label>
+                  <textarea 
+                    value={occasionDesc} 
+                    onChange={e => setOccasionDesc(e.target.value)} 
+                    className="w-full px-4 py-2.5 border border-border-subtle rounded-2xl bg-surface-base focus:ring-2 focus:ring-accent-valor focus:outline-none text-sm font-medium h-24 resize-none text-text-high" 
+                    placeholder="Keterangan singkat mengenai acara..."
+                  />
+                </div>
 
-              <button 
-                type="submit" 
-                disabled={submitting}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg shadow-primary-500/10 flex items-center justify-center gap-2"
-              >
-                {submitting ? 'Menyimpan...' : 'Simpan Data'}
-              </button>
-            </form>
+                <button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="w-full py-3 bg-brand-primary text-[oklch(0.985_0.005_90)] disabled:opacity-50 rounded-2xl font-semibold transition-all active:scale-[0.97] mt-4 shadow-lg flex items-center justify-center gap-2"
+                >
+                  {submitting ? 'Menyimpan...' : 'Simpan Data'}
+                </button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

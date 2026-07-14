@@ -1,0 +1,21 @@
+bucket_definitions:
+  global:
+    data:
+      - SELECT * FROM periods
+      - SELECT * FROM bidang
+      - SELECT * FROM organization_units
+      - SELECT * FROM memberships
+      - SELECT * FROM positions
+      - SELECT * FROM members
+      - SELECT * FROM unit_members
+      - SELECT * FROM user_role
+      - SELECT * FROM type_program
+      - SELECT * FROM programs
+      - SELECT * FROM program_responsibility_pp
+      - SELECT * FROM program_indicators
+      - SELECT * FROM occasions
+      - SELECT * FROM coa
+      - SELECT * FROM anggaran_program
+      - SELECT * FROM journals
+      - SELECT * FROM journal_lines
+      

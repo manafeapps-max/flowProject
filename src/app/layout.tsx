@@ -1,11 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
 import OfflineManager from "@/components/OfflineManager";
 import { ThemeProvider } from "next-themes";
+import PowerSyncWrapper from "@/components/PowerSyncWrapper";
+import SyncStatusIndicator from "@/components/SyncStatusIndicator";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import OfflineFallback from "@/components/OfflineFallback";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-serif",
+});
 
 export const metadata: Metadata = {
   title: "CMP v1.1 - Church Management",
@@ -27,15 +39,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} bg-background text-foreground antialiased pb-20`}>
+    <html lang="en" className={`${inter.variable} ${playfair.variable}`} suppressHydrationWarning>
+      <body className="antialiased font-sans">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <OfflineManager>
-            <main className="min-h-screen">
-              {children}
-            </main>
-            <Navigation />
-          </OfflineManager>
+          <PowerSyncWrapper>
+            <OfflineManager>
+              <main className="min-h-screen px-page-x pb-[var(--spacing-safe-bottom)]">
+                {children}
+              </main>
+              <SyncStatusIndicator />
+              <PWAInstallPrompt />
+              <OfflineFallback />
+              <Navigation />
+            </OfflineManager>
+          </PowerSyncWrapper>
         </ThemeProvider>
       </body>
     </html>
