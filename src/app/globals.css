@@ -111,6 +111,10 @@ body {
   padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 html, body {
   overscroll-behavior-y: contain;
   -webkit-tap-highlight-color: transparent;
