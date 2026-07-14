@@ -3,6 +3,8 @@ const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
   '/globe.svg',
+  '/@powersync/worker/WASQLiteDB.umd.js',
+  '/@powersync/worker/SharedSyncImplementation.umd.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -33,11 +35,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
 
-  // Do not intercept database sync streaming or API requests
+  // Exclude non-GET, Supabase client, and external PowerSync synchronization stream URLs
   if (
-    url.includes('/powersync') || 
-    url.includes('supabase.co') || 
-    event.request.method !== 'GET'
+    event.request.method !== 'GET' ||
+    url.includes('supabase.co') ||
+    url.includes('powersync.journeyapps.com') ||
+    url.includes('powersync.dev') ||
+    // If it's a sync/auth api request on supabase, do not cache
+    url.includes('/auth/v1') ||
+    url.includes('/rest/v1')
   ) {
     return;
   }
