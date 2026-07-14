@@ -109,28 +109,7 @@ export default function ProgramsPage() {
   const activePeriod = activeMembershipPeriod || activeFiscalPeriod || (periods || [])[0];
 
   const currentUser = useAppStore(state => state.user);
-  const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
   const currentUserRole = useAppStore(state => state.currentUserRole);
-
-  const { data: userRolesData } = useQuery('SELECT * FROM user_role WHERE deleted_at IS NULL');
-  const userRolesList = userRolesData || [];
-  const userProfilesList: any[] = [];
-
-  const { data: myRolesData } = useQuery(
-    'SELECT * FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
-    [currentUser?.id || '', currentUser?.email || '', activePeriod?.id || '']
-  );
-  const myRoles = myRolesData || [];
-
-  useEffect(() => {
-    if (myRoles && myRoles.length > 0) {
-      setCurrentUserRole(myRoles[0].role);
-    } else if (currentUser && (currentUser.email === 'benmanafe48@gmail.com' || currentUser.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
-      setCurrentUserRole('SYSTEM_OWNER');
-    } else {
-      setCurrentUserRole(null);
-    }
-  }, [myRoles, currentUser, activePeriod, userRolesList, setCurrentUserRole]);
 
   // One-off migration: update any program's pjp_bidang_id to PELKES if it's not already
   useEffect(() => {

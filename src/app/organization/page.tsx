@@ -45,31 +45,9 @@ export default function OrganizationPage() {
   const activePeriod = periodList.find(p => p.is_active && (new Date(p.end_date).getTime() - new Date(p.start_date).getTime()) > 2 * 365.25 * 24 * 60 * 60 * 1000); // Active Membership Period (5-Year)
 
   const currentUser = useAppStore(state => state.user);
-  const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
   const currentUserRole = useAppStore(state => state.currentUserRole);
 
-  const { data: userRoleData, isLoading: loadingUserRoles } = useQuery(
-    'SELECT id, user_id, role, period_id FROM user_role WHERE deleted_at IS NULL'
-  );
-  const userRolesList = userRoleData || [];
-
-  const { data: myRolesData, isLoading: loadingMyRoles } = useQuery(
-    'SELECT id, role FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
-    [currentUser?.id || '', currentUser?.email || '', activePeriod?.id || '']
-  );
-  const myRoles = myRolesData || [];
-
-  const isLoading = loadingBidangs || loadingUnits || loadingMembers || loadingUnitMembers || loadingUserRoles || loadingMyRoles;
-
-  useEffect(() => {
-    if (myRoles && myRoles.length > 0) {
-      setCurrentUserRole(myRoles[0].role);
-    } else if (currentUser && (currentUser.email === 'benmanafe48@gmail.com' || currentUser.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
-      setCurrentUserRole('SYSTEM_OWNER');
-    } else {
-      setCurrentUserRole(null);
-    }
-  }, [myRoles, currentUser, activePeriod, userRolesList, setCurrentUserRole]);
+  const isLoading = loadingBidangs || loadingUnits || loadingMembers || loadingUnitMembers;
 
   const canManageOrg = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN';
 

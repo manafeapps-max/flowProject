@@ -132,11 +132,9 @@ export default function SettingsPage() {
   const lastSyncTime = useAppStore(state => state.lastSyncTime);
 
   const currentUser = useAppStore(state => state.user);
-  const setCurrentUserRole = useAppStore(state => state.setCurrentUserRole);
   const currentUserRole = useAppStore(state => state.currentUserRole);
   const canManageSettings = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN';
   const isCalendarAdmin = currentUserRole === 'SYSTEM_OWNER' || currentUserRole === 'SUPER_ADMIN';
-
   const { data: userRolesData } = useQuery(
     'SELECT id, user_id, role, period_id FROM user_role WHERE deleted_at IS NULL'
   );
@@ -161,31 +159,6 @@ export default function SettingsPage() {
     };
     fetchUserProfiles();
   }, []);
-
-  const currentUserId = currentUser?.id;
-  const activeMembershipPeriodId = activeMembershipPeriod?.id;
-
-  const { data: myRolesData } = useQuery(
-    'SELECT id, user_id, role, period_id FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
-    [currentUserId || '', currentUser?.email || '', activeMembershipPeriodId || '']
-  );
-  const myRoles = (myRolesData || []) as any[];
-
-  useEffect(() => {
-    if (myRoles && myRoles.length > 0) {
-      if (currentUserRole !== myRoles[0].role) {
-        setCurrentUserRole(myRoles[0].role);
-      }
-    } else if (currentUser && (currentUser.email === 'benmanafe48@gmail.com' || currentUser.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
-      if (currentUserRole !== 'SYSTEM_OWNER') {
-        setCurrentUserRole('SYSTEM_OWNER');
-      }
-    } else {
-      if (currentUserRole !== null) {
-        setCurrentUserRole(null);
-      }
-    }
-  }, [myRoles, currentUser, activeMembershipPeriodId, userRolesList, setCurrentUserRole, currentUserRole]);
 
   const [showIamModal, setShowIamModal] = useState(false);
   const [iamUserEmail, setIamUserEmail] = useState("");

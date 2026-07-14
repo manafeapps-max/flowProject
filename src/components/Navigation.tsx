@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Users, Briefcase, FileText, Settings, LogOut } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useQuery } from '@powersync/react';
+import { useEffect } from 'react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -19,6 +21,57 @@ export default function Navigation() {
   const currentUserRole = useAppStore((state) => state.currentUserRole);
   const setUser = useAppStore((state) => state.setUser);
   const setCurrentUserRole = useAppStore((state) => state.setCurrentUserRole);
+
+  // 1. Fetch periods to find active period
+  const { data: periodsData } = useQuery(
+    'SELECT id, start_date, end_date, is_active FROM periods WHERE deleted_at IS NULL ORDER BY start_date DESC'
+  );
+
+  // Helper to determine duration years
+  const getPeriodDurationYears = (p: any) => {
+    const start = new Date(p.start_date);
+    const end = new Date(p.end_date);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+    return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  };
+
+  const activeFiscalPeriod = (periodsData || []).find(p => p.is_active && getPeriodDurationYears(p) <= 2) || (periodsData || []).filter(p => getPeriodDurationYears(p) <= 2)[0];
+  const activeMembershipPeriod = (periodsData || []).find(p => p.is_active && getPeriodDurationYears(p) > 2) || (periodsData || []).filter(p => getPeriodDurationYears(p) > 2)[0];
+  const activePeriod = activeMembershipPeriod || activeFiscalPeriod || (periodsData || [])[0];
+
+  // 2. Fetch all user roles for the bootstrap fallback check
+  const { data: userRolesData } = useQuery('SELECT id, user_id, role FROM user_role WHERE deleted_at IS NULL');
+  const userRolesList = userRolesData || [];
+
+  // 3. Fetch the current logged-in user's role
+  const { data: myRolesData } = useQuery(
+    'SELECT id, role FROM user_role WHERE (user_id = ? OR LOWER(user_id) = LOWER(?)) AND period_id = ? AND deleted_at IS NULL',
+    [user?.id || '', user?.email || '', activePeriod?.id || '']
+  );
+  const myRoles = myRolesData || [];
+
+  // 4. Update global user role store reactively
+  useEffect(() => {
+    if (!user) {
+      if (currentUserRole !== null) {
+        setCurrentUserRole(null);
+      }
+      return;
+    }
+    if (myRoles && myRoles.length > 0) {
+      if (currentUserRole !== myRoles[0].role) {
+        setCurrentUserRole(myRoles[0].role);
+      }
+    } else if (user && (user.email === 'benmanafe48@gmail.com' || user.email === 'stolaputih@gmail.com' || userRolesList.length === 0)) {
+      if (currentUserRole !== 'SYSTEM_OWNER') {
+        setCurrentUserRole('SYSTEM_OWNER');
+      }
+    } else {
+      if (currentUserRole !== null) {
+        setCurrentUserRole(null);
+      }
+    }
+  }, [myRoles, user, activePeriod, userRolesList, setCurrentUserRole, currentUserRole]);
 
   if (!user) return null;
 
