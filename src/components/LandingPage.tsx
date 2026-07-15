@@ -739,10 +739,16 @@ export default function LandingPage() {
                         <div className="bg-accent-valor h-full rounded-full" style={{ width: "74%" }} />
                       </div>
                       
-                      {/* Sub-row 4: Financial breakdown */}
-                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
-                        <span className="flex items-center gap-1">Plafon: <strong className="text-text-high dark:text-white/80 font-semibold">Rp 15,000,000</strong></span>
-                        <span className="flex items-center gap-1">Realisasi: <strong className="text-accent-valor font-semibold">Rp 11,100,000</strong></span>
+                      {/* Sub-row 4: Financial breakdown (Split into two separate lines to prevent wrapping) */}
+                      <div className="flex flex-col gap-1.5 border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <div className="flex justify-between items-center">
+                          <span>Plafon:</span>
+                          <strong className="text-text-high dark:text-white/80 font-semibold">Rp 15,000,000</strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Realisasi:</span>
+                          <strong className="text-accent-valor font-semibold">Rp 11,100,000</strong>
+                        </div>
                       </div>
                     </div>
 
@@ -766,10 +772,16 @@ export default function LandingPage() {
                         <div className="bg-emerald-500/80 dark:bg-emerald-400 h-full rounded-full" style={{ width: "30%" }} />
                       </div>
                       
-                      {/* Sub-row 4: Financial breakdown */}
-                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
-                        <span className="flex items-center gap-1">Plafon: <strong className="text-text-high dark:text-white/80 font-semibold">Rp 8,000,000</strong></span>
-                        <span className="flex items-center gap-1">Realisasi: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">Rp 2,400,000</strong></span>
+                      {/* Sub-row 4: Financial breakdown (Split into two separate lines to prevent wrapping) */}
+                      <div className="flex flex-col gap-1.5 border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <div className="flex justify-between items-center">
+                          <span>Plafon:</span>
+                          <strong className="text-text-high dark:text-white/80 font-semibold">Rp 8,000,000</strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Realisasi:</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">Rp 2,400,000</strong>
+                        </div>
                       </div>
                     </div>
                   </div>
