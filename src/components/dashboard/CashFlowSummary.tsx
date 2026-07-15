@@ -30,7 +30,7 @@ export default function CashFlowSummary() {
   // Aggregate posted journal lines by COA types: 
   // Pemasukan = credit sum of INCOME/REVENUE/PENERIMAAN COAs
   // Pengeluaran = debit sum of EXPENSE/PENGELUARAN COAs
-  const { data: cashFlowData } = useQuery(
+  const { data: cashFlowData, isLoading } = useQuery(
     `SELECT 
       COALESCE(SUM(CASE WHEN LOWER(c.type) IN ('income', 'revenue', 'penerimaan') THEN jl.credit ELSE 0 END), 0) as total_pemasukan,
       COALESCE(SUM(CASE WHEN LOWER(c.type) IN ('expense', 'pengeluaran') THEN jl.debit ELSE 0 END), 0) as total_pengeluaran
@@ -88,12 +88,16 @@ export default function CashFlowSummary() {
             <div className="flex justify-between items-start">
               <div className="space-y-1">
                 <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">{item.title}</span>
-                <h3 className={`text-2xl font-bold font-serif tabular-nums tracking-tight ${
-                  isNegative ? 'text-error' : 'text-text-high'
-                }`}>
-                  Rp {Math.abs(item.amount).toLocaleString('id-ID')}
-                  {isNegative && <span className="text-sm font-semibold ml-1 font-sans">Defisit</span>}
-                </h3>
+                {isLoading ? (
+                  <div className="h-8 w-32 bg-border-subtle rounded animate-pulse my-0.5" />
+                ) : (
+                  <h3 className={`text-2xl font-bold font-serif tabular-nums tracking-tight ${
+                    isNegative ? 'text-error' : 'text-text-high'
+                  }`}>
+                    Rp {Math.abs(item.amount).toLocaleString('id-ID')}
+                    {isNegative && <span className="text-sm font-semibold ml-1 font-sans">Defisit</span>}
+                  </h3>
+                )}
               </div>
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${item.iconColor} border border-border-subtle`}>
                 <Icon size={20} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
 import { Briefcase, FileText, ChevronRight, Activity, LogOut } from "lucide-react";
@@ -26,17 +26,51 @@ function getRelativeTime(dateStr: string) {
   if (diffDays === 1) return 'Kemarin';
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+function DashboardSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto py-6 pb-24 animate-pulse">
+      {/* Mobile Header Skeleton */}
+      <header className="mb-8 pt-4 flex justify-between items-center gap-4 bg-surface-elevated border border-border-subtle p-5 rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)] md:hidden">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-surface-base border border-border-subtle shrink-0" />
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-border-subtle rounded" />
+            <div className="h-3 w-16 bg-border-subtle rounded" />
+          </div>
+        </div>
+        <div className="w-20 h-8 bg-surface-base rounded-2xl" />
+      </header>
+
+      {/* Navigation Cards Skeleton */}
+      <section className="grid grid-cols-2 gap-4 mb-8">
+        <div className="h-[120px] bg-surface-elevated border border-border-subtle rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)]" />
+        <div className="h-[120px] bg-surface-elevated border border-border-subtle rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)]" />
+      </section>
+
+      {/* Charts & Summaries Skeletons */}
+      <section className="mb-8 space-y-6">
+        <div className="h-[140px] bg-surface-elevated border border-border-subtle rounded-3xl shadow-[var(--shadow-soft)]" />
+        <div className="h-[250px] bg-surface-elevated border border-border-subtle rounded-3xl shadow-[var(--shadow-soft)]" />
+      </section>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { user, currentUserRole, setUser, setCurrentUserRole } = useAppStore();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Redirect to landing page on client if session is missing
   useEffect(() => {
-    if (!user) {
+    if (mounted && !user) {
       router.push("/");
     }
-  }, [user, router]);
+  }, [user, router, mounted]);
 
   const { data: recentActivities = [] } = useQuery(
     `SELECT id, name, status, updated_at, 'program' as type FROM programs WHERE deleted_at IS NULL
@@ -46,13 +80,9 @@ export default function DashboardPage() {
      LIMIT 5`
   );
 
-  // Show a subtle loader while user state is resolving
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-valor" />
-      </div>
-    );
+  // Show a stable skeleton loader while user state is resolving/hydrating
+  if (!mounted || !user) {
+    return <DashboardSkeleton />;
   }
 
   const handleLogout = async () => {
@@ -95,7 +125,7 @@ export default function DashboardPage() {
 
       <section className="grid grid-cols-2 gap-4 mb-8">
         <motion.div whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.15, ease: easings.smooth }}>
-          <Link href="/programs" className="flex flex-col h-full bg-brand-primary text-[oklch(0.985_0.005_90)] p-5 rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)] transition-transform">
+          <Link href="/programs" className="flex flex-col h-full bg-brand-primary text-[oklch(0.985_0.005_90)] p-5 rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)]">
             <Briefcase size={28} className="mb-3 text-accent-valor" />
             <h2 className="font-semibold text-lg">Programs</h2>
             <p className="text-[oklch(0.80_0.15_85)] text-sm mt-1">Manage budget</p>
@@ -103,7 +133,7 @@ export default function DashboardPage() {
         </motion.div>
         
         <motion.div whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.15, ease: easings.smooth }}>
-          <Link href="/ledger" className="bg-surface-elevated p-5 rounded-[var(--radius-lg)] border border-border-subtle shadow-[var(--shadow-soft)] transition-transform flex flex-col justify-between h-full">
+          <Link href="/ledger" className="bg-surface-elevated p-5 rounded-[var(--radius-lg)] border border-border-subtle shadow-[var(--shadow-soft)] flex flex-col justify-between h-full">
             <FileText size={28} className="mb-3 text-[oklch(0.62_0.17_150)]" />
             <div>
               <h2 className="font-semibold text-lg text-text-high">Ledger</h2>

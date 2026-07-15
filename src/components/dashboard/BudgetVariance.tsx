@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useQuery } from '@powersync/react';
 import { Period } from "@/lib/powersync/types";
 import { AlertTriangle, TrendingUp, CheckCircle } from "lucide-react";
@@ -82,9 +83,48 @@ export default function BudgetVariance() {
   const reportItems = Array.from(programMap.values());
   const isLoading = loadingPrograms || loadingActuals;
 
+  const [showLoader, setShowLoader] = useState(false);
+
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        setShowLoader(true);
+      }, 250); // Delay spinner by 250ms to prevent flash on fast local queries
+      return () => clearTimeout(timer);
+    } else {
+      setShowLoader(false);
+    }
+  }, [isLoading]);
+
   if (isLoading) {
+    if (!showLoader) {
+      // Render stable layout skeleton to maintain stability during fast SQLite reads
+      return (
+        <div className="bg-surface-elevated border border-border-subtle rounded-3xl p-6 shadow-[var(--shadow-soft)] space-y-6 animate-pulse">
+          <div>
+            <div className="h-5 w-48 bg-border-subtle rounded" />
+            <div className="h-3 w-64 bg-border-subtle rounded mt-1.5" />
+          </div>
+          <div className="space-y-5">
+            {[1, 2].map((i) => (
+              <div key={i} className="p-4 border border-border-subtle rounded-2xl bg-surface-sunken flex flex-col gap-3">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="space-y-2">
+                    <div className="h-4 w-32 bg-border-subtle rounded" />
+                    <div className="h-3 w-16 bg-border-subtle rounded" />
+                  </div>
+                  <div className="h-8 w-24 bg-border-subtle rounded" />
+                </div>
+                <div className="w-full h-2 rounded-full bg-surface-base border border-border-subtle" />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex py-12 items-center justify-center">
+      <div className="flex py-12 items-center justify-center bg-surface-elevated border border-border-subtle rounded-3xl shadow-[var(--shadow-soft)]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-accent-valor border-t-transparent"></div>
           <p className="text-xs font-semibold tracking-wide text-text-muted font-mono animate-pulse">MENGHITUNG VARIANS ANGGARAN...</p>
