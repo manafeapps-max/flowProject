@@ -27,6 +27,7 @@ export default function LandingPage() {
   const [activeTab, setActiveTab] = useState("ledger");
   const [syncCount, setSyncCount] = useState(148);
   const [showScrollIndicator, setShowScrollIndicator] = useState(true);
+  const [activeSection, setActiveSection] = useState("hero");
 
   useEffect(() => {
     setMounted(true);
@@ -37,10 +38,40 @@ export default function LandingPage() {
       } else {
         setShowScrollIndicator(true);
       }
+
+      // Track active section using viewport bounding boxes
+      const sectionsList = ["hero", "ekosistem", "fitur", "demo", "gabung"];
+      const viewportCenter = window.innerHeight / 2;
+      for (const id of sectionsList) {
+        const el = document.getElementById(id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= viewportCenter && rect.bottom >= viewportCenter) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
+    // Run once initially to set correct active state
+    setTimeout(handleScroll, 100);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleScrollToId = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const headerOffset = 100; // Offset for fixed header
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+      window.history.pushState(null, "", `#${id}`);
+    }
+  };
 
   // Interval to toggle online/offline state to showcase offline capabilities
   useEffect(() => {
@@ -184,7 +215,7 @@ export default function LandingPage() {
         <div className="w-full h-[1px] animate-dashed-line mb-16 opacity-10 dark:opacity-30 pointer-events-none select-none" />
 
         {/* Hero Section */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start mb-16 sm:mb-24 lg:mb-32">
+        <section id="hero" className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start mb-16 sm:mb-24 lg:mb-32">
           {/* Hero Content (Left 7 Cols) */}
           <div className="lg:col-span-7 flex flex-col pt-4">
             <motion.div 
@@ -232,22 +263,33 @@ export default function LandingPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.8 }}
-              className="grid grid-cols-3 gap-3 sm:gap-6 mt-16 border-t border-border-subtle dark:border-white/10 pt-8"
+              className="flex flex-col sm:grid sm:grid-cols-3 gap-5 sm:gap-6 mt-12 sm:mt-16 border-t border-border-subtle dark:border-white/10 pt-8"
             >
-              <div>
-                <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">LATENCY RATE</p>
-                <p className="text-3xl font-serif text-accent-valor tracking-tight tabular-nums">0.0ms</p>
-                <p className="text-[10px] text-text-muted dark:text-white/50">Local SQLite storage</p>
+              {/* Item 1 */}
+              <div className="flex items-center justify-between sm:flex-col sm:items-start pb-4 sm:pb-0 border-b border-border-subtle/40 sm:border-b-0 dark:border-white/5">
+                <div className="flex flex-col pr-4">
+                  <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">LATENCY RATE</p>
+                  <p className="text-[10px] text-text-muted dark:text-white/50 font-light">Local SQLite storage</p>
+                </div>
+                <p className="text-2xl sm:text-3xl font-serif text-accent-valor tracking-tight tabular-nums sm:mt-2 shrink-0">0.0ms</p>
               </div>
-              <div>
-                <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">AVAILABILITY</p>
-                <p className="text-3xl font-serif text-accent-valor tracking-tight tabular-nums">100%</p>
-                <p className="text-[10px] text-text-muted dark:text-white/50">Full offline redundancy</p>
+
+              {/* Item 2 */}
+              <div className="flex items-center justify-between sm:flex-col sm:items-start pb-4 sm:pb-0 border-b border-border-subtle/40 sm:border-b-0 dark:border-white/5">
+                <div className="flex flex-col pr-4">
+                  <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">AVAILABILITY</p>
+                  <p className="text-[10px] text-text-muted dark:text-white/50 font-light">Full offline redundancy</p>
+                </div>
+                <p className="text-2xl sm:text-3xl font-serif text-accent-valor tracking-tight tabular-nums sm:mt-2 shrink-0">100%</p>
               </div>
-              <div>
-                <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">DATA SECURITY</p>
-                <p className="text-3xl font-serif text-accent-valor tracking-tight tabular-nums">AES-256</p>
-                <p className="text-[10px] text-text-muted dark:text-white/50">Local device encryption</p>
+
+              {/* Item 3 */}
+              <div className="flex items-center justify-between sm:flex-col sm:items-start">
+                <div className="flex flex-col pr-4">
+                  <p className="text-[9px] font-bold tracking-widest text-text-disabled dark:text-white/40 uppercase font-mono mb-1">DATA SECURITY</p>
+                  <p className="text-[10px] text-text-muted dark:text-white/50 font-light">Local device encryption</p>
+                </div>
+                <p className="text-2xl sm:text-3xl font-serif text-accent-valor tracking-tight tabular-nums sm:mt-2 shrink-0">AES-256</p>
               </div>
             </motion.div>
           </div>
@@ -272,22 +314,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Connection Status Row (Isolated on a new line below) */}
-              <div className="flex items-center justify-between mb-4 bg-surface-base/40 dark:bg-white/[0.02] px-3 py-2.5 rounded-xl border border-border-subtle dark:border-white/5 transition-all">
-                <div className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-amber-500 shadow-[0_0_8px_#f59e0b]"} animate-pulse`} />
-                  <span className="text-[10px] font-mono font-bold text-text-high dark:text-white uppercase tracking-wider">
-                    {isOnline ? "Online Sync Active" : "Offline Cache Active"}
-                  </span>
-                </div>
-                <div className="flex items-center shrink-0">
-                  {isOnline ? (
-                    <Wifi size={12} className="text-emerald-500 animate-pulse" />
-                  ) : (
-                    <WifiOff size={12} className="text-amber-500" />
-                  )}
-                </div>
-              </div>
+
 
               {/* Sync Diagram - GPU Guarded with lightweight Framer Motion transitions (no heavy rotates or scales) */}
               <div className="grid grid-cols-7 items-center gap-2 relative bg-surface-base/80 dark:bg-white/[0.02] border border-border-subtle dark:border-white/5 rounded-2xl p-4 mb-6">
@@ -326,6 +353,23 @@ export default function LandingPage() {
                   <Server size={24} className="text-brand-primary mb-1" />
                   <span className="text-[9px] font-bold font-mono text-text-high dark:text-white">Supabase (Cloud)</span>
                   <span className="text-[8px] text-text-muted dark:text-white/40">Central Hub</span>
+                </div>
+              </div>
+
+              {/* Connection Status Row (Isolated below the diagram to prevent header pulsing) */}
+              <div className="flex items-center justify-between mb-6 bg-surface-base/40 dark:bg-white/[0.02] px-3 py-2.5 rounded-xl border border-border-subtle dark:border-white/5 transition-all">
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-amber-500 shadow-[0_0_8px_#f59e0b]"} animate-pulse`} />
+                  <span className="text-[10px] font-mono font-bold text-text-high dark:text-white uppercase tracking-wider">
+                    {isOnline ? "Online Sync Active" : "Offline Cache Active"}
+                  </span>
+                </div>
+                <div className="flex items-center shrink-0">
+                  {isOnline ? (
+                    <Wifi size={12} className="text-emerald-500 animate-pulse" />
+                  ) : (
+                    <WifiOff size={12} className="text-amber-500" />
+                  )}
                 </div>
               </div>
 
@@ -455,7 +499,7 @@ export default function LandingPage() {
         </section>
 
         {/* Exclusive Feature Focus (Visual Architecture & Details) */}
-        <section className="mb-16 sm:mb-24 lg:mb-32 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <section id="fitur" className="mb-16 sm:mb-24 lg:mb-32 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-5 order-2 lg:order-1">
             <div className="relative rounded-3xl overflow-hidden border border-border-subtle dark:border-white/10 glow-navy bg-surface-elevated dark:bg-black/50 aspect-[4/5] sm:aspect-square lg:aspect-auto lg:h-[450px]">
               <img 
@@ -518,7 +562,7 @@ export default function LandingPage() {
         <div className="w-full h-[1px] animate-dashed-line my-12 sm:my-16 opacity-10 dark:opacity-20 pointer-events-none select-none" />
 
         {/* Interactive Interactive Tabs showcasing UI Features */}
-        <section className="mb-16 sm:mb-24 lg:mb-32">
+        <section id="demo" className="mb-16 sm:mb-24 lg:mb-32">
           <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-12 lg:mb-16">
             <span className="text-[10px] font-bold tracking-widest text-accent-valor uppercase font-mono block mb-2">INTERACTIVE DEMONSTRATION</span>
             <h2 className="text-3xl font-serif text-text-high dark:text-white tracking-tight mb-4">
@@ -706,7 +750,7 @@ export default function LandingPage() {
         </section>
 
         {/* CTA Footer Section */}
-        <section className="text-center max-w-3xl mx-auto border border-border-strong dark:border-white/10 rounded-3xl p-6 sm:p-10 md:p-16 glow-gold bg-surface-elevated/80 dark:bg-black/40 relative overflow-hidden">
+        <section id="gabung" className="text-center max-w-3xl mx-auto border border-border-strong dark:border-white/10 rounded-3xl p-6 sm:p-10 md:p-16 glow-gold bg-surface-elevated/80 dark:bg-black/40 relative overflow-hidden">
           <div className="absolute top-[-20%] left-[-20%] w-[40%] h-[40%] rounded-full bg-accent-valor opacity-10 blur-3xl pointer-events-none select-none" />
           
           <span className="text-[10px] font-bold tracking-widest text-accent-valor uppercase font-mono block mb-3">GET STARTED TODAY</span>
@@ -766,13 +810,42 @@ export default function LandingPage() {
                     repeat: Infinity, 
                     ease: "easeInOut" 
                   }}
-                  className="w-1 h-1 rounded-full bg-accent-valor"
+                  className="w-1.5 h-1.5 rounded-full bg-accent-valor"
                 />
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating Vertical Section Dots Indicator */}
+      <div className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 pointer-events-auto">
+        {mounted && [
+          { id: "hero", label: "Intro" },
+          { id: "ekosistem", label: "System" },
+          { id: "fitur", label: "Tech" },
+          { id: "demo", label: "Demo" },
+          { id: "gabung", label: "Start" }
+        ].map((sec) => (
+          <button
+            key={sec.id}
+            onClick={() => handleScrollToId(sec.id)}
+            className="group flex items-center justify-end gap-2 bg-transparent border-0 p-1 cursor-pointer focus:outline-none"
+            title={sec.label}
+          >
+            <span className={`text-[8px] font-bold font-mono tracking-widest text-accent-valor uppercase transition-all duration-300 opacity-0 group-hover:opacity-100 hidden md:inline ${
+              activeSection === sec.id ? "md:opacity-100 scale-100" : "scale-95"
+            }`}>
+              {sec.label}
+            </span>
+            <div className={`w-2 h-2 rounded-full border transition-all duration-300 ${
+              activeSection === sec.id 
+                ? "bg-accent-valor border-accent-valor scale-125 shadow-[0_0_8px_#c5a855]" 
+                : "bg-surface-elevated/80 dark:bg-black/40 border-border-strong dark:border-white/10 group-hover:border-accent-valor/60"
+            }`} />
+          </button>
+        ))}
+      </div>
     </div>
   );
-}
+};
