@@ -707,37 +707,69 @@ export default function LandingPage() {
                   <div className="flex justify-between items-center pb-4 border-b border-border-subtle dark:border-white/5">
                     <div>
                       <h4 className="text-base font-semibold text-text-high dark:text-white font-serif">Simulasi Rencana Anggaran Program</h4>
-                      <p className="text-xs text-text-muted dark:text-white/40">Pengawasan budget dan realisasi program</p>
+                      <p className="text-xs text-text-muted dark:text-white/40 font-light">Pengawasan budget dan realisasi program</p>
                     </div>
-                    <span className="text-[10px] font-mono text-accent-valor px-2 py-0.5 rounded border border-accent-valor/30 bg-accent-valor/5">Program Live</span>
+                    {/* Live Indicator (Icon only) */}
+                    <div className="flex items-center justify-center p-1.5" title="Program Live (Aktif)">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-valor opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-valor"></span>
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1.5 font-mono">
-                        <span className="text-text-high dark:text-white/80">Bidang Pelkes - Program Pengobatan Gratis</span>
-                        <span className="text-accent-valor">74% Terpakai (Realisasi)</span>
+                  <div className="grid grid-cols-1 gap-3.5 mt-2">
+                    {/* Card 1 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: Bidang & Status */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">BIDANG PELKES</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-accent-valor/10 text-accent-valor border border-accent-valor/25 uppercase tracking-wider">
+                          74% Terpakai
+                        </span>
                       </div>
-                      <div className="w-full bg-border-subtle dark:bg-white/5 h-2 rounded-full overflow-hidden">
+                      
+                      {/* Sub-row 2: Nama Program */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Program Pengobatan Gratis
+                      </p>
+                      
+                      {/* Sub-row 3: Progress Bar */}
+                      <div className="w-full bg-border-subtle dark:bg-white/5 h-1.5 rounded-full overflow-hidden my-0.5">
                         <div className="bg-accent-valor h-full rounded-full" style={{ width: "74%" }} />
                       </div>
-                      <div className="flex justify-between text-[10px] text-text-disabled dark:text-white/40 font-mono mt-1">
-                        <span>Plafon: Rp 15,000,000</span>
-                        <span>Realisasi: Rp 11,100,000</span>
+                      
+                      {/* Sub-row 4: Financial breakdown */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span className="flex items-center gap-1">Plafon: <strong className="text-text-high dark:text-white/80 font-semibold">Rp 15,000,000</strong></span>
+                        <span className="flex items-center gap-1">Realisasi: <strong className="text-accent-valor font-semibold">Rp 11,100,000</strong></span>
                       </div>
                     </div>
 
-                    <div>
-                      <div className="flex justify-between text-xs mb-1.5 font-mono">
-                        <span className="text-text-high dark:text-white/80">Bidang Pembinaan - Kursus Kepemimpinan Pemuda</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">30% Terpakai (Realisasi)</span>
+                    {/* Card 2 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: Bidang & Status */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">BIDANG PEMBINAAN</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                          30% Terpakai
+                        </span>
                       </div>
-                      <div className="w-full bg-border-subtle dark:bg-white/5 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-50 dark:bg-emerald-400 h-full rounded-full" style={{ width: "30%" }} />
+                      
+                      {/* Sub-row 2: Nama Program */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Kursus Kepemimpinan Pemuda
+                      </p>
+                      
+                      {/* Sub-row 3: Progress Bar */}
+                      <div className="w-full bg-border-subtle dark:bg-white/5 h-1.5 rounded-full overflow-hidden my-0.5">
+                        <div className="bg-emerald-500/80 dark:bg-emerald-400 h-full rounded-full" style={{ width: "30%" }} />
                       </div>
-                      <div className="flex justify-between text-[10px] text-text-disabled dark:text-white/40 font-mono mt-1">
-                        <span>Plafon: Rp 8,000,000</span>
-                        <span>Realisasi: Rp 2,400,000</span>
+                      
+                      {/* Sub-row 4: Financial breakdown */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span className="flex items-center gap-1">Plafon: <strong className="text-text-high dark:text-white/80 font-semibold">Rp 8,000,000</strong></span>
+                        <span className="flex items-center gap-1">Realisasi: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">Rp 2,400,000</strong></span>
                       </div>
                     </div>
                   </div>
@@ -756,26 +788,79 @@ export default function LandingPage() {
                   <div className="flex justify-between items-center pb-4 border-b border-border-subtle dark:border-white/5">
                     <div>
                       <h4 className="text-base font-semibold text-text-high dark:text-white font-serif">Tata Otoritas & Keanggotaan</h4>
-                      <p className="text-xs text-text-muted dark:text-white/40">Multi-period dynamic role mapping</p>
+                      <p className="text-xs text-text-muted dark:text-white/40 font-light">Multi-period dynamic role mapping</p>
                     </div>
-                    <span className="text-[10px] font-mono text-accent-valor px-2 py-0.5 rounded border border-accent-valor/30 bg-accent-valor/5">Roles Live</span>
+                    {/* Live Indicator (Icon only) */}
+                    <div className="flex items-center justify-center p-1.5" title="Roles Live (Aktif)">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-valor opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-valor"></span>
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
-                    <div className="p-3 bg-surface-base dark:bg-white/5 border border-border-subtle dark:border-white/5 rounded-2xl text-center">
-                      <span className="text-[9px] text-text-disabled dark:text-white/40 block mb-1">SYSTEM_OWNER</span>
-                      <p className="text-xs text-text-high dark:text-white font-semibold mb-1">Pemilik Sistem Utama</p>
-                      <p className="text-[9px] text-accent-valor">Full Database Read/Write</p>
+                  <div className="grid grid-cols-1 gap-3.5 mt-2">
+                    {/* Card 1 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: System Tag & Access Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">SYSTEM_OWNER</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-brand-primary/10 text-brand-primary dark:text-white border border-brand-primary/25 dark:border-white/20 uppercase tracking-wider">
+                          Full Access
+                        </span>
+                      </div>
+                      
+                      {/* Sub-row 2: Role Title */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Pemilik Sistem Utama
+                      </p>
+                      
+                      {/* Sub-row 3: Database access */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span>Hak Akses: <strong className="text-brand-primary dark:text-white font-semibold">Read & Write (All Tables)</strong></span>
+                      </div>
                     </div>
-                    <div className="p-3 bg-surface-base dark:bg-white/5 border border-border-subtle dark:border-white/5 rounded-2xl text-center">
-                      <span className="text-[9px] text-text-disabled dark:text-white/40 block mb-1">BENDAHARA_UMUM</span>
-                      <p className="text-xs text-text-high dark:text-white font-semibold mb-1">Otoritas Ledger Kas</p>
-                      <p className="text-[9px] text-accent-valor">Journal posting & reporting</p>
+
+                    {/* Card 2 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: System Tag & Access Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">BENDAHARA_UMUM</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                          Ledger Access
+                        </span>
+                      </div>
+                      
+                      {/* Sub-row 2: Role Title */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Otoritas Ledger Kas
+                      </p>
+                      
+                      {/* Sub-row 3: Database access */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span>Hak Akses: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">Posting & Financial Reporting</strong></span>
+                      </div>
                     </div>
-                    <div className="p-3 bg-surface-base dark:bg-white/5 border border-border-subtle dark:border-white/5 rounded-2xl text-center">
-                      <span className="text-[9px] text-text-disabled dark:text-white/40 block mb-1">STAF_PELAYANAN</span>
-                      <p className="text-xs text-text-high dark:text-white font-semibold mb-1">Manajer Program</p>
-                      <p className="text-[9px] text-accent-valor">Draft programs & indicators</p>
+
+                    {/* Card 3 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: System Tag & Access Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">STAF_PELAYANAN</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 uppercase tracking-wider">
+                          Program Access
+                        </span>
+                      </div>
+                      
+                      {/* Sub-row 2: Role Title */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Manajer Program Pelayanan
+                      </p>
+                      
+                      {/* Sub-row 3: Database access */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span>Hak Akses: <strong className="text-blue-600 dark:text-blue-400 font-semibold">Draft Programs & Performance Indicators</strong></span>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -806,29 +891,20 @@ export default function LandingPage() {
         </section>
 
         {/* Fine Footer */}
-        <footer className="mt-12 sm:mt-16 pt-6 border-t border-border-subtle dark:border-white/5 text-center text-xs flex flex-col items-center justify-center gap-3">
-          {/* Row 1: Brand & Return link */}
-          <div className="flex items-center justify-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="font-serif font-bold text-text-high dark:text-white tracking-wide">FLOW</span>
-              <span className="text-[8px] text-accent-valor font-mono font-extrabold uppercase tracking-widest">PROJECT 2.0</span>
-            </div>
-            <span className="text-border-subtle dark:text-white/10 select-none">|</span>
-            <button 
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="text-text-muted hover:text-accent-valor font-mono text-[10px] tracking-wider uppercase transition-colors cursor-pointer"
-            >
-              Kembali ke Atas ↑
-            </button>
+        <footer className="mt-12 sm:mt-16 pt-6 border-t border-border-subtle dark:border-white/5 text-center text-xs flex flex-col items-center justify-center gap-4">
+          {/* Row 1: Brand Identity (2 centered lines) */}
+          <div className="flex flex-col items-center justify-center gap-1.5">
+            <span className="font-serif font-bold text-lg tracking-wide leading-none text-text-high dark:text-white">FLOW</span>
+            <span className="text-[8px] text-accent-valor font-mono font-extrabold uppercase tracking-widest leading-none">PROJECT 2.0</span>
           </div>
 
           {/* Row 2: Legal Links */}
           <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted dark:text-white/40">
-            <Link href="#" onClick={(e) => e.preventDefault()} className="hover:text-accent-valor transition-colors">
+            <Link href="/terms" className="hover:text-accent-valor transition-colors">
               Ketentuan Umum
             </Link>
             <span className="text-border-subtle dark:text-white/10 select-none">•</span>
-            <Link href="#" onClick={(e) => e.preventDefault()} className="hover:text-accent-valor transition-colors">
+            <Link href="/privacy" className="hover:text-accent-valor transition-colors">
               Kebijakan Privasi
             </Link>
           </div>
