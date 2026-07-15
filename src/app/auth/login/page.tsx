@@ -35,7 +35,8 @@ export default function LoginPage() {
         if (data.user) {
           if (data.session) {
             setUser(data.user);
-            router.push("/");
+            document.cookie = "flow_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            router.push("/dashboard");
           } else {
             setSuccess("Registration successful! Please check your email for a confirmation link.");
             setEmail("");
@@ -52,7 +53,8 @@ export default function LoginPage() {
 
         if (data.user) {
           setUser(data.user);
-          router.push("/");
+          document.cookie = "flow_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          router.push("/dashboard");
         }
       }
     } catch (err: any) {
@@ -72,7 +74,8 @@ export default function LoginPage() {
       user_metadata: {},
       created_at: new Date().toISOString(),
     } as any);
-    router.push("/");
+    document.cookie = "flow_demo_mode=true; path=/; max-age=2592000; SameSite=Lax; Secure";
+    router.push("/dashboard");
   };
 
   return (

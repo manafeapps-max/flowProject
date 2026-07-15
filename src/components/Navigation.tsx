@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, Users, Briefcase, FileText, Settings, LogOut } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useQuery } from '@powersync/react';
@@ -17,6 +17,7 @@ const navItems = [
 
 export default function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAppStore((state) => state.user);
   const currentUserRole = useAppStore((state) => state.currentUserRole);
   const setUser = useAppStore((state) => state.setUser);
@@ -78,8 +79,12 @@ export default function Navigation() {
   const handleLogout = async () => {
     const { supabase } = await import("@/lib/supabase");
     await supabase.auth.signOut();
+    // Clear cookies on logout
+    document.cookie = "flow_sb_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = "flow_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     setUser(null);
     setCurrentUserRole(null);
+    router.push("/");
   };
 
   return (

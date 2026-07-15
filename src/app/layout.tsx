@@ -8,6 +8,7 @@ import PowerSyncWrapper from "@/components/PowerSyncWrapper";
 import SyncStatusIndicator from "@/components/SyncStatusIndicator";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import OfflineFallback from "@/components/OfflineFallback";
+import MainLayoutWrapper from "@/components/MainLayoutWrapper";
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -54,9 +55,9 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PowerSyncWrapper>
             <OfflineManager>
-              <main className="min-h-screen px-page-x pt-4 md:pt-24 pb-[var(--spacing-safe-bottom)]">
+              <MainLayoutWrapper>
                 {children}
-              </main>
+              </MainLayoutWrapper>
               <SyncStatusIndicator />
               <PWAInstallPrompt />
               <OfflineFallback />
