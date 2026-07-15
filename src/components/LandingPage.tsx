@@ -122,9 +122,9 @@ export default function LandingPage() {
       <div className="absolute top-[35%] left-[60%] w-[35vw] h-[35vw] rounded-full bg-[oklch(0.25_0.06_260)] opacity-5 dark:opacity-15 blur-[100px] pointer-events-none select-none z-0" />
 
       {/* Amanloka Geometric Architectural Grid Guidelines - Guarded from interactions */}
-      <div className="absolute top-0 bottom-0 left-[8%] w-[1px] bg-border-subtle dark:bg-white/5 pointer-events-none select-none z-10" />
-      <div className="absolute top-0 bottom-0 right-[8%] w-[1px] bg-border-subtle dark:bg-white/5 pointer-events-none select-none z-10" />
-      <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-border-subtle/40 dark:bg-white/[0.02] pointer-events-none select-none z-10 hidden md:block" />
+      <div className="absolute top-0 bottom-0 left-[8%] w-[1px] bg-gradient-to-b from-transparent via-black/[0.03] dark:via-white/5 to-transparent pointer-events-none select-none z-10" />
+      <div className="absolute top-0 bottom-0 right-[8%] w-[1px] bg-gradient-to-b from-transparent via-black/[0.03] dark:via-white/5 to-transparent pointer-events-none select-none z-10" />
+      <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-gradient-to-b from-transparent via-black/[0.015] dark:via-white/[0.02] to-transparent pointer-events-none select-none z-10 hidden md:block" />
 
       {/* Hero Header Navbar */}
       <header className="fixed top-0 left-0 right-0 border-b border-border-subtle dark:border-white/5 backdrop-blur-md bg-[oklch(0.985_0.005_90)]/80 dark:bg-[#050505]/80 z-50 transition-colors duration-300">
@@ -181,7 +181,7 @@ export default function LandingPage() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 md:px-12 pt-28 md:pt-36 pb-12 z-20">
         
         {/* Animated Dashed Horizontal Line (Amanloka scroll aesthetic) - Guarded from interactions */}
-        <div className="w-full h-[1px] animate-dashed-line mb-16 opacity-20 dark:opacity-30 pointer-events-none select-none" />
+        <div className="w-full h-[1px] animate-dashed-line mb-16 opacity-10 dark:opacity-30 pointer-events-none select-none" />
 
         {/* Hero Section */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start mb-16 sm:mb-24 lg:mb-32">
@@ -261,28 +261,31 @@ export default function LandingPage() {
               className="bg-surface-elevated/80 dark:bg-black/40 border border-border-strong dark:border-white/10 rounded-3xl p-6 glow-navy backdrop-blur-xl relative overflow-hidden"
             >
               {/* Header inside widget */}
-              <div className="flex items-center justify-between pb-4 border-b border-border-subtle dark:border-white/5 mb-6">
+              <div className="flex items-center justify-between pb-4 border-b border-border-subtle dark:border-white/5 mb-4">
                 <div className="flex items-center gap-2">
                   <Database size={16} className="text-accent-valor" />
                   <span className="text-xs font-bold font-mono text-text-high dark:text-white tracking-wider">FLOW SYNC ENGINE</span>
                 </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-text-disabled dark:text-white/40">Queue Count:</span>
+                  <span className="text-xs font-mono font-bold text-accent-valor tabular-nums">{syncCount}</span>
+                </div>
+              </div>
+
+              {/* Connection Status Row (Isolated on a new line below) */}
+              <div className="flex items-center justify-between mb-4 bg-surface-base/40 dark:bg-white/[0.02] px-3 py-2.5 rounded-xl border border-border-subtle dark:border-white/5 transition-all">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-text-disabled dark:text-white/40">{syncCount} Syncs</span>
-                  <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold font-mono uppercase flex items-center gap-1 transition-all ${
-                    isOnline 
-                      ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" 
-                      : "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                  }`}>
-                    {isOnline ? (
-                      <>
-                        <Wifi size={10} /> Online
-                      </>
-                    ) : (
-                      <>
-                        <WifiOff size={10} /> Offline Mode
-                      </>
-                    )}
-                  </div>
+                  <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-amber-500 shadow-[0_0_8px_#f59e0b]"} animate-pulse`} />
+                  <span className="text-[10px] font-mono font-bold text-text-high dark:text-white uppercase tracking-wider">
+                    {isOnline ? "Online Sync Active" : "Offline Cache Active"}
+                  </span>
+                </div>
+                <div className="flex items-center shrink-0">
+                  {isOnline ? (
+                    <Wifi size={12} className="text-emerald-500 animate-pulse" />
+                  ) : (
+                    <WifiOff size={12} className="text-amber-500" />
+                  )}
                 </div>
               </div>
 
@@ -327,12 +330,13 @@ export default function LandingPage() {
               </div>
 
               {/* Dynamic activity lists inside widget */}
-              <div className="space-y-3 h-[176px] overflow-hidden">
+              <div className="space-y-3 h-[220px] overflow-hidden">
                 <span className="text-[10px] font-bold font-mono text-text-disabled dark:text-white/30 uppercase tracking-widest block">Local Queue & Synchronization Log</span>
                 <AnimatePresence initial={false}>
                   {syncLogs.map((log) => (
                     <motion.div
                       key={log.id}
+                      layout
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, y: 15 }}
@@ -511,7 +515,7 @@ export default function LandingPage() {
         </section>
 
         {/* Animated Dashed Horizontal Line - Guarded from interactions */}
-        <div className="w-full h-[1px] animate-dashed-line my-12 sm:my-16 opacity-20 pointer-events-none select-none" />
+        <div className="w-full h-[1px] animate-dashed-line my-12 sm:my-16 opacity-10 dark:opacity-20 pointer-events-none select-none" />
 
         {/* Interactive Interactive Tabs showcasing UI Features */}
         <section className="mb-16 sm:mb-24 lg:mb-32">
