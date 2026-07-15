@@ -155,7 +155,7 @@ export default function LandingPage() {
 
 
   return (
-    <div className="bg-[oklch(0.985_0.005_90)] dark:bg-[#050505] text-text-high dark:text-[#e0e0e0] min-h-screen relative overflow-hidden font-sans selection:bg-accent-valor selection:text-black transition-colors duration-300">
+    <div className="bg-[oklch(0.985_0.005_90)] dark:bg-[#050505] text-text-high dark:text-[#e0e0e0] min-h-screen relative overflow-hidden font-sans selection:bg-accent-valor selection:text-black">
       {/* Noise Overlay from Amanloka - Guarded from interactions */}
       <div className="noise-overlay pointer-events-none select-none" />
 
@@ -170,7 +170,7 @@ export default function LandingPage() {
       <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-gradient-to-b from-transparent via-black/[0.015] dark:via-white/[0.02] to-transparent pointer-events-none select-none z-10 hidden md:block" />
 
       {/* Hero Header Navbar */}
-      <header className="fixed top-0 left-0 right-0 border-b border-border-subtle dark:border-white/5 backdrop-blur-md bg-[oklch(0.985_0.005_90)]/80 dark:bg-[#050505]/80 z-50 transition-colors duration-300">
+      <header className="fixed top-0 left-0 right-0 border-b border-border-subtle dark:border-white/5 backdrop-blur-md bg-[oklch(0.985_0.005_90)]/80 dark:bg-[#050505]/80 z-50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <button
             onClick={() => {

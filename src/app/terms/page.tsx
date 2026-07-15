@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 
 export default function TermsPage() {
   return (
-    <div className="bg-[oklch(0.985_0.005_90)] dark:bg-[#050505] text-text-high dark:text-[#e0e0e0] min-h-screen relative overflow-hidden font-sans transition-colors duration-300">
+    <div className="bg-[oklch(0.985_0.005_90)] dark:bg-[#050505] text-text-high dark:text-[#e0e0e0] min-h-screen relative overflow-hidden font-sans">
       {/* Decorative background orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[oklch(0.25_0.06_260)] opacity-5 dark:opacity-20 blur-[120px] pointer-events-none select-none z-0" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-[oklch(0.75_0.14_85)] opacity-5 dark:opacity-10 blur-[120px] pointer-events-none select-none z-0" />
