@@ -620,42 +620,77 @@ export default function LandingPage() {
                   <div className="flex justify-between items-center pb-4 border-b border-border-subtle dark:border-white/5">
                     <div>
                       <h4 className="text-base font-semibold text-text-high dark:text-white font-serif">Simulasi Jurnal Kas</h4>
-                      <p className="text-xs text-text-muted dark:text-white/40">Visualisasi transaksi kas ganda double-entry</p>
+                      <p className="text-xs text-text-muted dark:text-white/40 font-light">Visualisasi transaksi kas ganda double-entry</p>
                     </div>
-                    <span className="text-[10px] font-mono text-accent-valor px-2 py-0.5 rounded border border-accent-valor/30 bg-accent-valor/5">Ledger Live</span>
+                    {/* Live Indicator (Icon only) */}
+                    <div className="flex items-center justify-center p-1.5" title="Ledger Live (Aktif)">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-valor opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-valor"></span>
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs font-mono">
-                      <thead>
-                        <tr className="border-b border-border-subtle dark:border-white/5 text-text-disabled dark:text-white/40">
-                          <th className="py-2">No. Referensi</th>
-                          <th className="py-2">Keterangan</th>
-                          <th className="py-2 text-right">Debit</th>
-                          <th className="py-2 text-right">Kredit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border-subtle dark:divide-white/5 text-text-high dark:text-white/80">
-                        <tr>
-                          <td className="py-3 text-accent-valor">REF-2026-0092</td>
-                          <td className="py-3">Penerimaan Persembahan Ibadah Raya</td>
-                          <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">Rp 12,500,000</td>
-                          <td className="py-3 text-right">Rp 0</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 text-accent-valor">REF-2026-0093</td>
-                          <td className="py-3">Pengeluaran Logistik Bidang Pelkes</td>
-                          <td className="py-3 text-right">Rp 0</td>
-                          <td className="py-3 text-right text-red-600 dark:text-red-400">Rp 3,450,000</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 text-accent-valor">REF-2026-0094</td>
-                          <td className="py-3">Penerimaan Donasi Pembangunan</td>
-                          <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">Rp 25,000,000</td>
-                          <td className="py-3 text-right">Rp 0</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="grid grid-cols-1 gap-3.5 mt-2">
+                    {/* Row 1 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: Ref & Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">REF-2026-0092</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">DEBIT</span>
+                      </div>
+                      
+                      {/* Sub-row 2: Keterangan */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Penerimaan Persembahan Ibadah Raya
+                      </p>
+                      
+                      {/* Sub-row 3: Financial breakdown */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span className="flex items-center gap-1">Debit: <strong className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">Rp 12,500,000</strong></span>
+                        <span className="flex items-center gap-1">Kredit: <strong className="text-text-disabled dark:text-white/20">Rp 0</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Row 2 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: Ref & Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">REF-2026-0093</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 uppercase tracking-wider">KREDIT</span>
+                      </div>
+                      
+                      {/* Sub-row 2: Keterangan */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Pengeluaran Logistik Bidang Pelkes
+                      </p>
+                      
+                      {/* Sub-row 3: Financial breakdown */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span className="flex items-center gap-1">Debit: <strong className="text-text-disabled dark:text-white/20">Rp 0</strong></span>
+                        <span className="flex items-center gap-1">Kredit: <strong className="text-red-600 dark:text-red-400 text-xs font-semibold">Rp 3,450,000</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Row 3 */}
+                    <div className="p-4 bg-surface-base/50 dark:bg-white/[0.01] border border-border-subtle dark:border-white/5 rounded-2xl flex flex-col gap-2.5 transition-all hover:border-accent-valor/20">
+                      {/* Sub-row 1: Ref & Type */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold font-mono text-accent-valor tracking-wider">REF-2026-0094</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">DEBIT</span>
+                      </div>
+                      
+                      {/* Sub-row 2: Keterangan */}
+                      <p className="text-xs text-text-high dark:text-white/90 font-medium leading-relaxed">
+                        Penerimaan Donasi Pembangunan
+                      </p>
+                      
+                      {/* Sub-row 3: Financial breakdown */}
+                      <div className="flex justify-between items-center border-t border-border-subtle/50 dark:border-white/5 pt-2.5 mt-1 text-[10px] font-mono text-text-muted dark:text-white/40">
+                        <span className="flex items-center gap-1">Debit: <strong className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">Rp 25,000,000</strong></span>
+                        <span className="flex items-center gap-1">Kredit: <strong className="text-text-disabled dark:text-white/20">Rp 0</strong></span>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -771,18 +806,37 @@ export default function LandingPage() {
         </section>
 
         {/* Fine Footer */}
-        <footer className="mt-12 sm:mt-16 pt-6 border-t border-border-subtle dark:border-white/5 text-center text-text-disabled dark:text-white/30 text-xs flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-text-high dark:text-white tracking-wide">FLOW</span>
-            <span className="text-[9px] text-accent-valor font-mono">PROJECT 2.0</span>
+        <footer className="mt-12 sm:mt-16 pt-6 border-t border-border-subtle dark:border-white/5 text-center text-xs flex flex-col items-center justify-center gap-3">
+          {/* Row 1: Brand & Return link */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="font-serif font-bold text-text-high dark:text-white tracking-wide">FLOW</span>
+              <span className="text-[8px] text-accent-valor font-mono font-extrabold uppercase tracking-widest">PROJECT 2.0</span>
+            </div>
+            <span className="text-border-subtle dark:text-white/10 select-none">|</span>
+            <button 
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="text-text-muted hover:text-accent-valor font-mono text-[10px] tracking-wider uppercase transition-colors cursor-pointer"
+            >
+              Kembali ke Atas ↑
+            </button>
           </div>
-          <p className="font-light">© 2026 FLOW Platform. All rights reserved. Sovereign Digital Stewardship.</p>
-          <button 
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="text-text-muted hover:text-accent-valor font-mono text-[10px] tracking-wider uppercase transition-colors cursor-pointer"
-          >
-            Kembali ke Atas ↑
-          </button>
+
+          {/* Row 2: Legal Links */}
+          <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted dark:text-white/40">
+            <Link href="#" onClick={(e) => e.preventDefault()} className="hover:text-accent-valor transition-colors">
+              Ketentuan Umum
+            </Link>
+            <span className="text-border-subtle dark:text-white/10 select-none">•</span>
+            <Link href="#" onClick={(e) => e.preventDefault()} className="hover:text-accent-valor transition-colors">
+              Kebijakan Privasi
+            </Link>
+          </div>
+
+          {/* Row 3: Copyright */}
+          <p className="font-light text-text-disabled dark:text-white/35 text-[10px]">
+            © 2026 FLOW Platform. All rights reserved. Sovereign Digital Stewardship.
+          </p>
         </footer>
 
       </div>

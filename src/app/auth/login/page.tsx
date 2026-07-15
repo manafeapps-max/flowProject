@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { LogIn, Mail, Lock, AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { LogIn, Mail, Lock, AlertCircle, CheckCircle2, UserPlus, ArrowLeft } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -79,8 +80,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center px-6 py-12 bg-background">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen flex flex-col justify-center px-6 py-12 bg-background relative">
+      {/* Back to Landing Page Button */}
+      <div className="absolute top-6 left-6">
+        <Link 
+          href="/" 
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-all py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm active:scale-95 cursor-pointer"
+        >
+          <ArrowLeft size={14} />
+          Kembali ke Beranda
+        </Link>
+      </div>
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md mt-8 sm:mt-0">
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center rotate-3 shadow-sm">
             <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center -rotate-6 shadow-lg">
