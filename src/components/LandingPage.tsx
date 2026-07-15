@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 import { 
@@ -167,10 +168,12 @@ export default function LandingPage() {
             }}
             className="flex items-center gap-3 group bg-transparent border-0 p-0 text-left cursor-pointer"
           >
-            <img 
+            <Image 
               src="/icon_apps_flow.png" 
               alt="Flow Logo" 
-              className="w-11 h-11 object-contain rounded-xl shadow-sm group-hover:scale-105 transition-transform duration-300" 
+              width={44}
+              height={44}
+              className="object-contain rounded-xl shadow-sm group-hover:scale-105 transition-transform duration-300" 
             />
             <div className="flex flex-col justify-center">
               <span className="font-serif font-bold text-xl tracking-wide leading-none text-text-high dark:text-white">FLOW</span>
@@ -502,10 +505,13 @@ export default function LandingPage() {
         <section id="fitur" className="mb-16 sm:mb-24 lg:mb-32 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-5 order-2 lg:order-1">
             <div className="relative rounded-3xl overflow-hidden border border-border-subtle dark:border-white/10 glow-navy bg-surface-elevated dark:bg-black/50 aspect-[4/5] sm:aspect-square lg:aspect-auto lg:h-[450px]">
-              <img 
+              <Image 
                 src="/hero_church_architecture.png" 
                 alt="Cathedral architectural render generated asset"
-                className="w-full h-full object-cover opacity-85 hover:scale-102 transition-transform duration-700 dark:brightness-90" 
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                priority
+                className="object-cover opacity-85 hover:scale-102 transition-transform duration-700 dark:brightness-90" 
               />
               <div className="absolute inset-0 bg-gradient-to-t from-surface-elevated dark:from-black via-transparent to-transparent" />
               
