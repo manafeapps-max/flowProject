@@ -117,6 +117,17 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'fiscal' | 'membership' | 'struktur' | 'appearance' | 'iam' | 'sync' | 'calendar'>('fiscal');
 
   const { theme, setTheme } = useTheme();
+  const changeTheme = (newTheme: string) => {
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.add("disable-transitions");
+    }
+    setTheme(newTheme);
+    setTimeout(() => {
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove("disable-transitions");
+      }
+    }, 40);
+  };
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -758,7 +769,7 @@ export default function SettingsPage() {
                 whileHover={{ scale: 1.015 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.15, ease: easings.smooth }}
-                onClick={() => setTheme('light')} 
+                onClick={() => changeTheme('light')} 
                 className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'light' 
                     ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 
@@ -777,7 +788,7 @@ export default function SettingsPage() {
                 whileHover={{ scale: 1.015 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.15, ease: easings.smooth }}
-                onClick={() => setTheme('dark')} 
+                onClick={() => changeTheme('dark')} 
                 className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'dark' 
                     ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 
@@ -796,7 +807,7 @@ export default function SettingsPage() {
                 whileHover={{ scale: 1.015 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.15, ease: easings.smooth }}
-                onClick={() => setTheme('system')} 
+                onClick={() => changeTheme('system')} 
                 className={`flex flex-col items-start p-5 rounded-3xl border text-left transition-all outline-none min-h-touch cursor-pointer w-full ${
                   theme === 'system' 
                     ? 'bg-surface-elevated border-accent-valor shadow-[var(--shadow-soft)] ring-2 ring-accent-valor/10' 

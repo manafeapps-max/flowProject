@@ -22,6 +22,17 @@ const initialSyncLogs = [
 
 export default function LandingPage() {
   const { theme, setTheme } = useTheme();
+  const toggleTheme = () => {
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.add("disable-transitions");
+    }
+    setTheme(theme === "dark" ? "light" : "dark");
+    setTimeout(() => {
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove("disable-transitions");
+      }
+    }, 40);
+  };
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [syncLogs, setSyncLogs] = useState(initialSyncLogs);
@@ -183,7 +194,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4 md:gap-6">
             {mounted && (
               <button
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={toggleTheme}
                 className="p-2.5 rounded-xl border border-border-subtle dark:border-white/10 bg-surface-elevated/60 dark:bg-white/5 text-text-high dark:text-white hover:border-accent-valor/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                 title="Ganti Tema"
               >
@@ -237,7 +248,7 @@ export default function LandingPage() {
               {/* Manifesto Typography Enforcement: Serif Heading */}
               <h1 className="text-4xl sm:text-5xl md:text-7xl font-serif font-light text-text-high dark:text-white tracking-tight leading-[1.1] mb-6">
                 FLOW: <br />
-                <span className="font-serif italic font-normal text-luxury-gradient pr-2">Stewardship, Perfected.</span>
+                <span className="font-serif italic font-normal text-luxury-gradient box-decoration-clone pr-3">Stewardship, Perfected.</span>
               </h1>
               
               <p className="text-text-muted dark:text-white/60 text-base md:text-lg font-light leading-relaxed max-w-xl mb-10">
@@ -423,7 +434,7 @@ export default function LandingPage() {
           <div className="max-w-2xl mb-8 sm:mb-12 lg:mb-16">
             <span className="text-[10px] font-bold tracking-widest text-accent-valor uppercase font-mono block mb-2">SYSTEM ARCHITECTURE</span>
             <h2 className="text-3xl sm:text-4xl font-serif text-text-high dark:text-white tracking-tight mb-4">
-              Pilar Utama Tata Kelola <span className="font-serif italic font-normal text-luxury-gradient pr-2">FLOW 2.0</span>
+              Pilar Utama Tata Kelola <span className="font-serif italic font-normal text-luxury-gradient box-decoration-clone pr-3">FLOW 2.0</span>
             </h2>
             <p className="text-text-muted dark:text-white/50 text-sm md:text-base font-light">
               Arsitektur modular kami dirancang khusus untuk operasional struktural yang dinamis dan pelaporan keuangan yang akuntabel.
@@ -527,7 +538,7 @@ export default function LandingPage() {
             <span className="text-[10px] font-bold tracking-widest text-accent-valor uppercase font-mono block mb-2">EXCLUSIVE HIGHLIGHT</span>
             <h2 className="text-3xl sm:text-4xl font-serif text-text-high dark:text-white tracking-tight mb-6">
               Teknologi Offline-First <br />
-              <span className="font-serif italic font-normal text-luxury-gradient pr-2">Tanpa Hambatan Sinkronisasi</span>
+              <span className="font-serif italic font-normal text-luxury-gradient box-decoration-clone pr-3">Tanpa Hambatan Sinkronisasi</span>
             </h2>
 
             <div className="space-y-6">
@@ -894,7 +905,7 @@ export default function LandingPage() {
           <span className="text-[10px] font-bold tracking-widest text-accent-valor uppercase font-mono block mb-3">GET STARTED TODAY</span>
           <h2 className="text-3xl sm:text-4xl font-serif text-text-high dark:text-white tracking-tight mb-6">
             Siap Mengorkestrasi <br />
-            <span className="font-serif italic font-normal text-luxury-gradient pr-3">Stewardship Gereja Anda?</span>
+            <span className="font-serif italic font-normal text-luxury-gradient box-decoration-clone pr-4">Stewardship Gereja Anda?</span>
           </h2>
           <p className="text-text-muted dark:text-white/50 text-sm font-light max-w-lg mx-auto mb-10">
             Dapatkan kontrol penuh atas rencana anggaran kerja dan laporan keuangan secara transparan, aman, dan bekerja penuh dalam kondisi offline sekalipun.

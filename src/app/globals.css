@@ -190,6 +190,8 @@ input, textarea, select {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* Premium Glow effects */
@@ -206,5 +208,17 @@ input, textarea, select {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--color-border-subtle) 20%, var(--color-border-subtle) 80%, transparent);
   width: 100%;
+}
+
+/* Disable transitions temporarily to prevent flashing on theme switch */
+.disable-transitions,
+.disable-transitions *,
+.disable-transitions *:before,
+.disable-transitions *:after {
+  -webkit-transition: none !important;
+  -moz-transition: none !important;
+  -o-transition: none !important;
+  -ms-transition: none !important;
+  transition: none !important;
 }
 
